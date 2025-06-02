@@ -1,41 +1,50 @@
+/* Import Tailwind CSS's base styles, components, and utilities. */
+/* These directives are processed by Tailwind to generate the final CSS. */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/* Basic body styling. */
 body {
-  margin: 0;
+  margin: 0; /* Remove default browser margin. */
+  /* Define a default font stack, prioritizing system fonts for performance and consistency. */
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen",
     "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue",
     sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  background-color: #f3f4f6; /* Default background similar to gray-100 */
+  -webkit-font-smoothing: antialiased; /* Improve font rendering on WebKit browsers. */
+  -moz-osx-font-smoothing: grayscale; /* Improve font rendering on Firefox. */
+  background-color: #f3f4f6; /* Default background color, similar to Tailwind's gray-100. */
 }
 
-/* Custom Scrollbar */
+/* Custom Scrollbar Styles */
+/* These styles apply to WebKit-based browsers (e.g., Chrome, Safari). */
 .custom-scrollbar::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 6px; /* Width of the vertical scrollbar. */
+  height: 6px; /* Height of the horizontal scrollbar. */
 }
 .custom-scrollbar::-webkit-scrollbar-track {
-  background: #f1f1f1;
-  border-radius: 10px;
+  background: #f1f1f1; /* Background color of the scrollbar track. */
+  border-radius: 10px; /* Rounded corners for the track. */
 }
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #a8a8a8; /* Slightly darker gray */
-  border-radius: 10px;
+  background: #a8a8a8; /* Color of the scrollbar thumb (the draggable part). */
+  border-radius: 10px; /* Rounded corners for the thumb. */
 }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #777; /* Darker on hover */
+  background: #777; /* Darker color for the thumb on hover. */
 }
 
-/* For Firefox */
+/* Custom Scrollbar Styles for Firefox. */
+/* `scrollbar-width` and `scrollbar-color` are Firefox-specific properties. */
 .custom-scrollbar {
-  scrollbar-width: thin;
-  scrollbar-color: #a8a8a8 #f1f1f1;
+  scrollbar-width: thin; /* Makes the scrollbar thinner. */
+  scrollbar-color: #a8a8a8 #f1f1f1; /* thumb color track color */
 }
 
+/* Custom utility class for a top shadow. */
+/* This can be applied to elements that need a shadow appearing at their top edge,
+   useful for fixed headers or elements that scroll under others. */
 .shadow-top {
-  box-shadow: 0 -2px 4px -1px rgba(0, 0, 0, 0.06),
-    0 -4px 5px -1px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 -2px 4px -1px rgba(0, 0, 0, 0.06), /* First shadow layer */
+    0 -4px 5px -1px rgba(0, 0, 0, 0.06); /* Second shadow layer for more depth */
 }

@@ -1,27 +1,41 @@
-// src/pages/selling/components/EmptyState.jsx
+// This component renders an empty state message for the "Your Items for Sale" page.
+// It displays different messages and actions based on whether the user has any items listed
+// or if the current search/filter criteria yield no results.
 
 import React from "react";
-// Assuming your global EmptyState component is at this path
+// GlobalEmptyState is a reusable component for displaying various empty state messages.
 import GlobalEmptyState from "./../../../components/UI/EmptyState.jsx";
-import PlusCircleIcon from "./../../../components/icons/PlusCircleIcon.jsx"; // For the "List Your First Item" button
+// Icon for the "List Your First Item" button.
+import PlusCircleIcon from "./../../../components/icons/PlusCircleIcon.jsx";
 
+/**
+ * SellingEmptyState component.
+ *
+ * @param {object} props - The component's props.
+ * @param {boolean} props.isUserItemsEmpty - True if the user has no items listed at all.
+ * @param {string} props.globalSearchTerm - The current global search term, if any.
+ * @param {Function} props.onOpenAddModal - Function to open the modal to add a new item.
+ * @param {object} [props.activeFilters] - Optional: Active local filters, if needed for more specific messages.
+ */
 const SellingEmptyState = ({
-  isUserItemsEmpty, // Boolean: true if the user has no items listed at all
-  globalSearchTerm, // The current global search term, if any
-  onOpenAddModal, // Function to open the modal to add a new item
-  // You could also pass 'activeFilters' if you want to customize messages based on specific filters
+  isUserItemsEmpty,
+  globalSearchTerm,
+  onOpenAddModal,
+  // activeFilters, // This prop is available if more granular messages are needed.
 }) => {
-  let icon = "search"; // Default icon
+  let icon = "search"; // Default icon for "no results".
   let title = "No items found";
   let description =
     "No items match your current filters. Try adjusting your search criteria.";
-  let actionButton = null;
+  let actionButton = null; // Placeholder for an action button.
 
+  // Scenario 1: The user has no items listed at all.
   if (isUserItemsEmpty) {
-    icon = "shopping"; // Or a specific "add item" icon if you have one
+    icon = "shopping"; // Icon suggesting shopping or adding items.
     title = "No items listed yet";
     description =
       "Start selling by listing your first item. It's quick and easy!";
+    // Action button to prompt the user to list their first item.
     actionButton = (
       <button
         onClick={onOpenAddModal}
@@ -31,26 +45,27 @@ const SellingEmptyState = ({
         <span>List Your First Item</span>
       </button>
     );
-  } else if (globalSearchTerm) {
-    // This case is when there are items, but none match the global search
+  }
+  // Scenario 2: The user has items, but none match the current global search term.
+  // (Local filters might also be active, but global search takes precedence in this message).
+  else if (globalSearchTerm) {
     icon = "search";
     title = "No items found for your search";
     description = `No items match "${globalSearchTerm}". Try different keywords or adjust your filters.`;
-    // Optionally, add a "Clear Search" or "Clear Filters" button here
+    // Optionally, a "Clear Search" or "Clear Filters" button could be added here.
   }
-  // You can add more conditions here if you pass 'activeFilters' and want to customize
-  // the message for "No items match your filters" vs "No items match your search".
+  // Scenario 3 (Implicit): User has items, no global search, but local filters yield no results.
+  // The default title and description cover this case.
 
   return (
+    // Wrapper div for margin or other layout adjustments.
     <div className="mt-8">
-      {" "}
-      {/* Or other appropriate wrapper */}
       <GlobalEmptyState
         icon={icon}
         title={title}
         description={description}
-        actionButton={actionButton}
-        className="py-16" // You can adjust styling as needed
+        actionButton={actionButton} // Pass the conditionally defined action button.
+        className="py-16" // Add padding to the empty state display.
       />
     </div>
   );

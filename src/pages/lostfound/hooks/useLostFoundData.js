@@ -1,56 +1,73 @@
-// src/pages/lostfound/hooks/useLostFoundData.js
+// This custom React hook encapsulates the business logic and state management
+// for the Lost & Found section. It handles fetching lost or found items based on status,
+// filtering, sorting, and CRUD operations for these items.
 
 import { useState, useEffect, useCallback, useMemo } from "react";
+// Firebase imports for database interactions.
 import {
   db,
-  appId, // Assuming appId is used for collection paths
-} from "../../../firebase.jsx"; // Adjust path as necessary
+  appId, // Used for namespacing Firestore collection paths.
+} from "../../../firebase.jsx";
 import {
   collection,
   query,
-  where,
-  orderBy,
-  onSnapshot,
+  where, // For filtering by status (lost/found).
+  orderBy, // For sorting items by date or other criteria.
+  onSnapshot, // For real-time updates.
   doc,
   addDoc,
-  setDoc, // For updates, or updateDoc
+  setDoc, // Can be used for updates (with merge:true).
   deleteDoc,
-  serverTimestamp, // If you use server timestamps for createdAt/updatedAt
-  Timestamp, // If you're converting dates for queries or display prep
+  serverTimestamp, // For server-generated timestamps.
+  // Timestamp, // Not explicitly used here but often useful for date conversions.
 } from "firebase/firestore";
-import {
-  LOSTFOUND_CATEGORIES,
-  STATUS_OPTIONS,
-  // DEFAULT_LOSTFOUND_FILTERS // If you define this
-} from "./lostFoundConstants.js";
-// import { someHelperFunction } from '../../../utils/helpers.js';
+// Constants specific to the lost & found feature (categories, status options).
+import // LOSTFOUND_CATEGORIES, // These are often imported directly in the component.
+// STATUS_OPTIONS,
+// DEFAULT_LOSTFOUND_FILTERS // If defined for default filter state.
+"./lostFoundConstants.js";
+// Example: import { someHelperFunction } from '../../../utils/helpers.js';
 
+/**
+ * Custom hook for managing Lost & Found data and operations.
+ *
+ * @param {object|null} user - The currently authenticated user object.
+ * @param {Function} showMessage - Callback function to display global messages.
+ * @param {string} [globalSearchTerm=""] - The global search term from the application header.
+ * @returns {object} An object containing state and functions for the Lost & Found section.
+ */
 const useLostFoundData = (user, showMessage, globalSearchTerm = "") => {
-  const [items, setItems] = useState([]); // All items for the current status (lost/found)
+  // State for all items matching the current 'status' filter (e.g., all 'lost' items).
+  const [items, setItems] = useState([]);
+  // Loading state for data fetching.
   const [loading, setLoading] = useState(true);
+  // Local filters: category, sort order, and status (lost/found).
   const [filters, setFilters] = useState({
     category: "",
     sortBy: "newest",
-    status: "lost", // Default to 'lost'
-    // No priceRange for lost & found
+    status: "lost", // Default to showing 'lost' items.
   });
 
+  // State for modal visibility and item being edited.
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
+  // State to indicate if the item form (add/edit) is processing.
   const [isFormProcessing, setIsFormProcessing] = useState(false);
-  const [operationInProgress, setOperationInProgress] = useState(false); // e.g., for delete
+  // State for ongoing operations like delete.
+  const [operationInProgress, setOperationInProgress] = useState(false);
 
+  // Firestore collection path for lost & found items.
   const itemsCollectionPath = `artifacts/${appId}/public/data/lostfound_items`;
 
-  // Fetch Lost & Found Items based on current filter.status
+  // Effect to fetch Lost & Found items based on the current `filters.status` (lost/found) and `filters.sortBy`.
+  // Uses onSnapshot for real-time updates.
   useEffect(() => {
     setLoading(true);
     const itemsRef = collection(db, itemsCollectionPath);
-    // Main query constraint: filter by status ('lost' or 'found')
+    // Primary query constraint: filter by status ('lost' or 'found').
     let q = query(itemsRef, where("status", "==", filters.status));
 
-    // Add sorting (default by newest)
-    // Note: Firestore requires an index for most compound queries (e.g., status + createdAt)
+    // Add sorting. Firestore requires an index for compound queries (e.g., status + createdAt).
     q = query(
       q,
       orderBy("createdAt", filters.sortBy === "oldest" ? "asc" : "desc")
@@ -76,10 +93,11 @@ const useLostFoundData = (user, showMessage, globalSearchTerm = "") => {
       }
     );
 
+    // Cleanup: unsubscribe from the listener when dependencies change or component unmounts.
     return () => unsubscribe();
-  }, [filters.status, filters.sortBy, itemsCollectionPath, showMessage]); // Re-fetch if status or sort order changes
+  }, [filters.status, filters.sortBy, itemsCollectionPath, showMessage]); // Re-fetch if status or sort order changes.
 
-  // Handle Filter Changes (category, sortBy, status)
+  // Callback to handle changes in local filters (category, sortBy, status).
   const handleFilterChange = useCallback((newFilterValues) => {
     setFilters((prevFilters) => ({
       ...prevFilters,
@@ -87,11 +105,12 @@ const useLostFoundData = (user, showMessage, globalSearchTerm = "") => {
     }));
   }, []);
 
-  // Processed (Filtered and Sorted client-side after initial fetch by status)
+  // Memoized derivation of items after applying global search and client-side category/sort filters.
+  // The primary status filter is handled by the Firestore query.
   const processedItems = useMemo(() => {
-    let filtered = [...items];
+    let filtered = [...items]; // Start with items fetched for the current status.
 
-    // Apply global search term
+    // Apply global search term (client-side).
     if (globalSearchTerm) {
       const term = globalSearchTerm.toLowerCase();
       filtered = filtered.filter(
@@ -99,107 +118,116 @@ const useLostFoundData = (user, showMessage, globalSearchTerm = "") => {
           item.name?.toLowerCase().includes(term) ||
           item.description?.toLowerCase().includes(term) ||
           item.category?.toLowerCase().includes(term) ||
-          item.lastSeenLocation?.toLowerCase().includes(term)
+          item.lastSeenLocation?.toLowerCase().includes(term) // Specific to L&F.
       );
     }
 
-    // Apply category filter (client-side, as status is the primary DB query filter)
+    // Apply category filter (client-side).
     if (filters.category && filters.category !== "All") {
       filtered = filtered.filter((item) => item.category === filters.category);
     }
 
-    // Client-side sorting if sortBy changes in a way not handled by the initial query
-    // (e.g., alphabetical). The initial query already sorts by date.
+    // Apply additional client-side sorting if needed (e.g., alphabetical).
+    // The initial Firestore query already handles date-based sorting.
     if (filters.sortBy === "alphabetical") {
       filtered.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
     }
-    // If initial query sorts by 'createdAt desc' (newest) or 'createdAt asc' (oldest),
-    // no further client-side date sorting is strictly needed unless items are added/modified client-side
-    // without re-triggering the onSnapshot with new sorting.
-    // The onSnapshot should re-evaluate with new orderBy if filters.sortBy (for date) changes.
 
     return filtered;
   }, [items, globalSearchTerm, filters.category, filters.sortBy]);
 
-  // Modal and Editing Logic
+  // --- Modal and Editing Logic ---
   const openAddModal = useCallback(() => {
-    setEditingItem(null); // Ensure it's a new item
+    setEditingItem(null); // Ensure form is for a new item.
     setIsModalOpen(true);
   }, []);
 
   const openEditModal = useCallback((item) => {
-    setEditingItem(item);
+    setEditingItem(item); // Set item data for editing.
     setIsModalOpen(true);
   }, []);
 
   const closeModal = useCallback(() => {
     if (!isFormProcessing) {
+      // Prevent closing if form is busy.
       setIsModalOpen(false);
       setEditingItem(null);
     }
   }, [isFormProcessing]);
 
-  // Item CRUD Operations
+  // --- Item CRUD Operations ---
+
+  /**
+   * Handles submission of the Lost & Found item form (add/edit).
+   * @param {object} itemDataFromForm - Data from the ItemForm component.
+   * @throws {Error} If user is not logged in or submission fails.
+   */
   const handleSubmitItem = useCallback(
     async (itemDataFromForm) => {
       if (!user) {
         showMessage?.("Please log in to post or update items.", "info");
         throw new Error("User not logged in");
       }
-      // setIsFormProcessing(true); // Let ItemForm manage its own busy state via onFormProcessing
+      // ItemForm can manage its own `isFormProcessing` state via the `onFormProcessing` callback.
 
-      // Ensure basic fields and userId for new items
+      // Prepare base data for Firestore.
       const baseData = {
         ...itemDataFromForm,
-        userId: editingItem ? editingItem.userId : user.uid, // Keep original userId on edit
+        // Preserve original userId on edit, set current user's ID for new items.
+        userId: editingItem ? editingItem.userId : user.uid,
         userEmail: editingItem ? editingItem.userEmail : user.email,
         userDisplayName: editingItem
           ? editingItem.userDisplayName
           : user.displayName || null,
-        updatedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(), // Set/update server timestamp.
       };
 
       if (!editingItem) {
-        // New item
+        // For new items.
         baseData.createdAt = serverTimestamp();
-        // Status for new item should be derived from the form or current filter context
-        // ItemForm will set status: 'lost' or 'found' based on dateFound
+        // The `status` ('lost' or 'found') should be set by ItemForm based on its logic
+        // (e.g., presence of `dateFound` might imply 'found').
       }
 
       try {
         if (editingItem?.id) {
+          // --- EDIT Operation ---
           const docRef = doc(db, itemsCollectionPath, editingItem.id);
-          // For setDoc with merge: true, or updateDoc
-          await setDoc(docRef, baseData, { merge: true }); // Or updateDoc for partial updates
+          // Use setDoc with merge:true for robust updates, or updateDoc for partial.
+          await setDoc(docRef, baseData, { merge: true });
           showMessage?.("Post updated successfully!", "success");
         } else {
+          // --- ADD Operation ---
           await addDoc(collection(db, itemsCollectionPath), baseData);
           showMessage?.("Post added successfully!", "success");
         }
-        closeModal();
+        closeModal(); // Close modal on success.
       } catch (error) {
         console.error("Error saving L&F item in useLostFoundData: ", error);
         showMessage?.(`Error saving post: ${error.message}`, "error");
-        throw error;
-      } finally {
-        // setIsFormProcessing(false);
+        throw error; // Re-throw for form to handle if needed.
       }
     },
     [user, editingItem, itemsCollectionPath, closeModal, showMessage]
   );
 
+  /**
+   * Handles deletion of a Lost & Found item.
+   * @param {string} itemId - The ID of the item to delete.
+   */
   const handleDeleteItem = useCallback(
     async (itemId) => {
       if (!user) {
         showMessage?.("Please log in to delete posts.", "info");
         return;
       }
-      // Add confirmation dialog here in a real app
+      // Confirmation dialog should be implemented in the component calling this.
       setOperationInProgress(true);
       try {
         await deleteDoc(doc(db, itemsCollectionPath, itemId));
         showMessage?.("Post deleted successfully!", "success");
-        // Note: Image deletion from storage would also be handled here if images are associated.
+        // Note: Image deletion from Firebase Storage would also be handled here
+        // if Lost & Found items had images, similar to the selling section.
       } catch (error) {
         console.error("Error deleting L&F post in useLostFoundData: ", error);
         showMessage?.(`Error deleting post: ${error.message}`, "error");
@@ -210,25 +238,24 @@ const useLostFoundData = (user, showMessage, globalSearchTerm = "") => {
     [user, itemsCollectionPath, showMessage]
   );
 
-  // Return state and functions
+  // Return state and functions for the LostAndFoundSection component.
   return {
-    items, // Raw items for the current status
+    items, // Raw items for the current status filter.
     loading,
     filters,
-    setFilters: handleFilterChange, // Expose filter update mechanism
-    processedItems, // Client-side filtered/sorted items
+    setFilters: handleFilterChange, // Function to update local filters.
+    processedItems, // Items after all client-side filtering and sorting.
     isModalOpen,
     editingItem,
-    isFormProcessing,
-    setIsFormProcessing, // To be controlled by ItemForm via LostAndFoundSection
+    // isFormProcessing, // ItemForm controls this via setIsFormProcessing.
+    setIsFormProcessing,
     operationInProgress,
     openAddModal,
     openEditModal,
     closeModal,
     handleSubmitItem,
     handleDeleteItem,
-    // lostFoundCategories: LOSTFOUND_CATEGORIES, // Section can import directly
-    // statusOptions: STATUS_OPTIONS, // Section can import directly
+    // Constants like LOSTFOUND_CATEGORIES can be imported directly by the section component.
   };
 };
 

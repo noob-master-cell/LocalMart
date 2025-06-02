@@ -1,4 +1,15 @@
-// project/src/components/Media/index.js
-import ImageViewer from "./ImageViewer/ImageViewer"; // Or './ImageViewer' if its index.js exports default
+/**
+ * @fileoverview Barrel file for Media components.
+ * This file re-exports media-related components, such as the ImageViewer,
+ * for streamlined imports elsewhere in the application.
+ */
 
-export { ImageViewer };
+import ImageViewer from "./ImageViewer/ImageViewer";
+
+export {
+  /**
+   * Component for viewing images, potentially with zoom, carousel, and thumbnail features.
+   * @see ImageViewer
+   */
+  ImageViewer,
+};

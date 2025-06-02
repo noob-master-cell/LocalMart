@@ -1,8 +1,9 @@
-// project/src/components/Filters/SearchAndFilter/index.js
-import SearchAndFilter from "./SearchAndFilter";
-export default SearchAndFilter;
+/**
+ * @fileoverview Barrel file for the SearchAndFilter component and its potential sub-components.
+ * This primarily exports the main SearchAndFilter component.
+ */
 
-// Optional:
-// export { default as SearchInput } from './SearchInput';
-// export { default as FilterSidebar } from './FilterSidebar';
-// export { default as FilterChips } from './FilterChips';
+import SearchAndFilter from "./SearchAndFilter";
+
+// Default export is the main SearchAndFilter component.
+export default SearchAndFilter;

@@ -1,14 +1,22 @@
+// This component renders a user icon within a circle, often used for profiles or user-related actions.
 import React from "react";
 
+/**
+ * UserCircleIcon component.
+ * @param {object} props - The component's props.
+ * @param {string} [props.className="w-6 h-6"] - Optional CSS classes for styling the SVG.
+ * @returns {JSX.Element} The SVG icon.
+ */
 const UserCircleIcon = ({ className = "w-6 h-6" }) => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
-    fill="none"
-    viewBox="0 0 24 24"
-    strokeWidth={1.5}
-    stroke="currentColor"
-    className={className}
+    fill="none" // No fill for the shapes.
+    viewBox="0 0 24 24" // Defines the SVG canvas dimensions.
+    strokeWidth={1.5} // Stroke thickness for the icon lines.
+    stroke="currentColor" // Inherits color from text color by default.
+    className={className} // Applies custom or default Tailwind CSS classes.
   >
+    {/* Path data for the user silhouette and the surrounding circle. */}
     <path
       strokeLinecap="round"
       strokeLinejoin="round"

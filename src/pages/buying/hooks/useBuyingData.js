@@ -1,35 +1,55 @@
-// src/pages/buying/hooks/useBuyingData.js
+// This custom React hook encapsulates the business logic and state management
+// for the "Buying" section. It handles fetching all items available for sale,
+// applying global search, local filters (category, price range), and sorting.
 
 import { useState, useEffect, useCallback, useMemo } from "react";
+// Firebase imports for database interactions.
 import {
   db,
-  appId, // Assuming appId is used for collection paths
-} from "../../../firebase.jsx"; // Adjust path as necessary
+  appId, // Used for namespacing Firestore collection paths.
+} from "../../../firebase.jsx";
 import {
   collection,
   query,
-  onSnapshot,
-  orderBy, // Potentially add where for initial filtering if needed (e.g., only "available" items if you add such a status)
+  onSnapshot, // For real-time updates to the list of items.
+  orderBy, // For default sorting (e.g., by creation date).
+  // `where` could be used for initial filtering if, for example, items had an "available" status.
 } from "firebase/firestore";
 
+// Constants for categories might be imported if used for default filter state,
+// but typically the component (`BuyingSection`) imports them for the UI.
+// import { BUYING_CATEGORIES } from "./buyingConstants.js";
+
+/**
+ * Custom hook for managing buying data and operations.
+ *
+ * @param {Function} showMessage - Callback function to display global messages/notifications.
+ * @param {string} [globalSearchTerm=""] - The global search term from the application header.
+ * @returns {object} An object containing state and functions for the buying section.
+ */
 const useBuyingData = (showMessage, globalSearchTerm = "") => {
-  const [allItems, setAllItems] = useState([]); // All 'sell' items fetched from Firestore
+  // State for storing all 'sell' items fetched from Firestore.
+  const [allItems, setAllItems] = useState([]);
+  // Loading state for initial data fetching.
   const [loading, setLoading] = useState(true);
+  // Local filters applied to the items (category, sort order, price range).
   const [filters, setFilters] = useState({
     category: "",
     sortBy: "newest",
     priceRange: { min: "", max: "" },
-    // No 'status' filter here as we're fetching all sellable items
+    // No 'status' filter here as this section fetches items for sale (implicitly "available").
   });
 
+  // Firestore collection path for items for sale.
   const itemsCollectionPath = `artifacts/${appId}/public/data/sell_items`;
 
-  // Fetch all items for sale
+  // Effect to fetch all items for sale.
+  // Uses onSnapshot for real-time updates if items are added/modified/deleted.
   useEffect(() => {
     setLoading(true);
     const itemsRef = collection(db, itemsCollectionPath);
-    // Initially, you might want to order by creation date
-    // More complex default sorting might require specific Firestore indexes
+    // Initial query: order by creation date (newest first).
+    // More complex default sorting might require specific Firestore indexes.
     const q = query(itemsRef, orderBy("createdAt", "desc"));
 
     const unsubscribe = onSnapshot(
@@ -55,24 +75,26 @@ const useBuyingData = (showMessage, globalSearchTerm = "") => {
       }
     );
 
+    // Cleanup: unsubscribe from the listener when component unmounts or dependencies change.
     return () => unsubscribe();
-  }, [itemsCollectionPath, showMessage]); // showMessage added as a dependency
+  }, [itemsCollectionPath, showMessage]); // `showMessage` is included if it might change.
 
-  // Handle Filter Changes
+  // Callback to handle changes in local filters.
   const handleFilterChange = useCallback((newFilterValues) => {
     setFilters((prevFilters) => ({
       ...prevFilters,
-      ...newFilterValues, // This allows partial updates, e.g., just { category: 'Electronics' }
+      ...newFilterValues, // Allows partial updates to filters.
+      // Ensure priceRange is always an object.
       priceRange: newFilterValues.priceRange ||
         prevFilters.priceRange || { min: "", max: "" },
     }));
   }, []);
 
-  // Processed (Filtered and Sorted) Items
+  // Memoized derivation of items after applying global search and local filters/sorting.
   const processedItems = useMemo(() => {
-    let filtered = [...allItems]; // Start with all fetched items
+    let filtered = [...allItems]; // Start with all fetched 'sell' items.
 
-    // Apply global search term
+    // Apply global search term.
     if (globalSearchTerm) {
       const term = globalSearchTerm.toLowerCase();
       filtered = filtered.filter(
@@ -83,13 +105,13 @@ const useBuyingData = (showMessage, globalSearchTerm = "") => {
       );
     }
 
-    // Apply category filter
+    // Apply category filter.
     if (filters.category && filters.category !== "All") {
-      // Assuming "All" means no filter
+      // "All" means no category filter.
       filtered = filtered.filter((item) => item.category === filters.category);
     }
 
-    // Apply price range filter
+    // Apply price range filter.
     if (filters.priceRange) {
       if (filters.priceRange.min !== "" && filters.priceRange.min !== null) {
         filtered = filtered.filter(
@@ -103,7 +125,7 @@ const useBuyingData = (showMessage, globalSearchTerm = "") => {
       }
     }
 
-    // Apply sort order
+    // Apply sorting.
     switch (filters.sortBy) {
       case "newest":
         filtered.sort(
@@ -125,20 +147,20 @@ const useBuyingData = (showMessage, globalSearchTerm = "") => {
         filtered.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
         break;
       default:
-        // Default sort (newest) already applied by initial query or previous case
+        // Default sort (newest) is typically handled by the initial query or previous case.
         break;
     }
     return filtered;
   }, [allItems, globalSearchTerm, filters]);
 
-  // Return state and functions
+  // Return state and functions to be used by the BuyingSection component.
   return {
-    allItems, // Could be useful for displaying total count before filtering
-    loading,
-    filters,
-    setFilters: handleFilterChange, // Expose filter update mechanism
-    processedItems, // Filtered and sorted items to display
-    // buyingCategories: BUYING_CATEGORIES, // BuyingSection can import this directly
+    allItems, // All items before any client-side filtering (useful for total counts).
+    loading, // Loading state.
+    filters, // Current local filters.
+    setFilters: handleFilterChange, // Function to update local filters.
+    processedItems, // Items after all filtering and sorting, ready for display.
+    // `buyingCategories` can be imported directly by the BuyingSection component if needed.
   };
 };
 

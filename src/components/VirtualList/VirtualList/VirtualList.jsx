@@ -1,41 +1,62 @@
-// project/src/components/VirtualList/VirtualList/VirtualList.jsx
+// This file implements VirtualList and VirtualGrid components for efficiently rendering
+// large lists and grids of items by only rendering the items visible in the viewport.
 import React, { useState, useEffect, useRef, useCallback, memo } from "react";
 
+/**
+ * VirtualList component for rendering long lists efficiently.
+ * Only renders items currently visible in the viewport, plus an overscan buffer.
+ *
+ * @param {object} props - Component props.
+ * @param {Array<object>} props.items - The full list of items to render. Each item should have a stable `id` if possible.
+ * @param {number} props.itemHeight - The fixed height of each item in pixels.
+ * @param {number} props.containerHeight - The height of the scrollable container in pixels.
+ * @param {Function} props.renderItem - Function to render each item: `(item, index, isScrolling) => JSX.Element`.
+ * @param {number} [props.overscan=3] - Number of items to render above and below the visible area.
+ * @param {string} [props.className=""] - Additional CSS classes for the outer container.
+ * @param {Function} [props.onLoadMore] - Callback function to load more items when near the end of the list.
+ * @param {boolean} [props.hasMore=false] - Indicates if there are more items to load.
+ * @param {boolean} [props.isLoading=false] - Indicates if items are currently being loaded.
+ * @param {React.ReactNode} [props.loadingComponent] - Custom component to display while loading more items.
+ * @param {React.ReactNode} [props.emptyComponent] - Custom component to display when the list is empty.
+ * @param {string} [props.scrollingStateText="Scrolling..."] - Text displayed when scrolling rapidly.
+ * @returns {JSX.Element} The virtualized list.
+ */
 const VirtualList = memo(
   ({
     items,
     itemHeight,
     containerHeight,
-    renderItem, // This prop is key for rendering item content
-    overscan = 3,
+    renderItem,
+    overscan = 3, // Number of items to render outside the viewport for smoother scrolling.
     className = "",
-    onLoadMore,
-    hasMore = false,
-    isLoading = false,
-    loadingComponent,
-    emptyComponent,
-    scrollingStateText = "Scrolling...",
-    // bufferSize = 5, // bufferSize was defined but not used in the provided code.
+    onLoadMore, // Callback to load more items.
+    hasMore = false, // Flag indicating if more items can be loaded.
+    isLoading = false, // Flag indicating if items are currently loading.
+    loadingComponent, // Optional custom loading indicator.
+    emptyComponent, // Optional custom component for empty list.
+    scrollingStateText = "Scrolling...", // Text to show during fast scroll.
   }) => {
-    const [scrollTop, setScrollTop] = useState(0);
-    const [isScrolling, setIsScrolling] = useState(false);
-    const scrollElementRef = useRef(null);
-    const scrollTimeout = useRef(null);
-    const lastScrollTime = useRef(Date.now());
+    const [scrollTop, setScrollTop] = useState(0); // Current scroll position from the top.
+    const [isScrolling, setIsScrolling] = useState(false); // True if the user is actively scrolling.
+    const scrollElementRef = useRef(null); // Ref for the scrollable div.
+    const scrollTimeout = useRef(null); // Timeout ID for detecting end of scroll.
+    const lastScrollTime = useRef(Date.now()); // Timestamp of the last scroll event.
 
+    // Calculate the range of items to render based on scroll position and overscan.
     const startIndex = Math.max(
       0,
       Math.floor(scrollTop / itemHeight) - overscan
     );
     const endIndex = Math.min(
-      items.length - 1, // Corrected to items.length - 1
-      Math.ceil((scrollTop + containerHeight) / itemHeight) + overscan // Removed -1, overscan handles buffer
+      items.length - 1,
+      Math.ceil((scrollTop + containerHeight) / itemHeight) + overscan
     );
 
-    const visibleItems = items.slice(startIndex, endIndex + 1);
-    const totalHeight = items.length * itemHeight;
-    const offsetY = startIndex * itemHeight;
+    const visibleItems = items.slice(startIndex, endIndex + 1); // Items currently in the render window.
+    const totalHeight = items.length * itemHeight; // Total scrollable height of the list.
+    const offsetY = startIndex * itemHeight; // Vertical offset for positioning visible items.
 
+    // Scroll event handler.
     const handleScroll = useCallback(
       (e) => {
         const currentScrollTop = e.target.scrollTop;
@@ -44,27 +65,28 @@ const VirtualList = memo(
 
         setScrollTop(currentScrollTop);
 
+        // Detect fast scrolling to potentially optimize rendering (e.g., by showing placeholders).
         const scrollSpeed =
-          Math.abs(currentScrollTop - scrollTop) / (timeDiff || 1); // Avoid division by zero
-        const isFastScrolling = scrollSpeed > 2;
+          Math.abs(currentScrollTop - scrollTop) / (timeDiff || 1);
+        const isFastScrolling = scrollSpeed > 2; // Threshold for fast scrolling.
 
         if (!isScrolling || isFastScrolling) {
           setIsScrolling(true);
         }
 
+        // Clear previous timeout and set a new one to detect when scrolling stops.
         if (scrollTimeout.current) {
           clearTimeout(scrollTimeout.current);
         }
-
         scrollTimeout.current = setTimeout(() => {
           setIsScrolling(false);
-        }, 150);
+        }, 150); // Delay to consider scrolling stopped.
 
         lastScrollTime.current = currentTime;
 
+        // Trigger onLoadMore if near the bottom of the list.
         const scrollHeight = e.target.scrollHeight;
         const clientHeight = e.target.clientHeight;
-        // Ensure scrollHeight is not zero to prevent NaN or Infinity
         const scrollPercentage =
           scrollHeight > 0
             ? (currentScrollTop + clientHeight) / scrollHeight
@@ -82,9 +104,10 @@ const VirtualList = memo(
         onLoadMore,
         itemHeight,
         containerHeight,
-      ] // Added itemHeight & containerHeight as they affect calculations implicitly
+      ]
     );
 
+    // Cleanup scroll timeout on component unmount.
     useEffect(() => {
       return () => {
         if (scrollTimeout.current) {
@@ -93,6 +116,7 @@ const VirtualList = memo(
       };
     }, []);
 
+    // Render empty state component if no items and not loading.
     if (items.length === 0 && !isLoading) {
       return (
         emptyComponent || (
@@ -105,21 +129,25 @@ const VirtualList = memo(
 
     return (
       <div className={`relative ${className}`}>
+        {/* Display scrolling indicator during fast scrolls. */}
         {isScrolling && (
           <div className="absolute top-2 right-2 bg-black bg-opacity-70 text-white text-xs px-2 py-1 rounded-full z-10">
             {scrollingStateText}
           </div>
         )}
+        {/* Scrollable container. */}
         <div
           ref={scrollElementRef}
-          className="overflow-auto"
+          className="overflow-auto" // Essential for scrolling.
           style={{ height: containerHeight }}
           onScroll={handleScroll}
         >
+          {/* Inner div representing the total height of all items. */}
           <div style={{ height: totalHeight, position: "relative" }}>
+            {/* Absolutely positioned div to hold the currently visible items. */}
             <div
               style={{
-                transform: `translateY(${offsetY}px)`,
+                transform: `translateY(${offsetY}px)`, // Shifts items into view.
                 position: "absolute",
                 top: 0,
                 left: 0,
@@ -127,21 +155,22 @@ const VirtualList = memo(
               }}
             >
               {visibleItems.map((item, index) => (
-                // The key should be stable, item.id is preferred
                 <div
+                  // Use item.id for key if available, otherwise fallback to index.
                   key={item.id || `virtual-item-${startIndex + index}`}
                   style={{ height: itemHeight }}
+                  // Disable pointer events during fast scrolling to improve performance.
                   className={isScrolling ? "pointer-events-none" : ""}
                 >
                   {renderItem(item, startIndex + index, isScrolling)}
                 </div>
               ))}
             </div>
+            {/* Loading indicator at the bottom when loading more items. */}
             {isLoading && (
               <div
                 style={{
                   position: "absolute",
-                  // Position loading at the bottom of the currently rendered content, or full height if few items
                   bottom: Math.max(
                     0,
                     totalHeight -
@@ -150,7 +179,7 @@ const VirtualList = memo(
                   ),
                   left: 0,
                   right: 0,
-                  height: itemHeight, // Height of one item for the loader
+                  height: itemHeight,
                 }}
               >
                 {loadingComponent || (
@@ -162,7 +191,8 @@ const VirtualList = memo(
             )}
           </div>
         </div>
-        {scrollTop > containerHeight && ( // Show scroll to top if scrolled more than one container height
+        {/* "Scroll to Top" button, visible when scrolled down. */}
+        {scrollTop > containerHeight && (
           <button
             onClick={() => {
               scrollElementRef.current?.scrollTo({
@@ -178,13 +208,12 @@ const VirtualList = memo(
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
-              xmlns="http://www.w3.org/2000/svg"
             >
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 strokeWidth={2}
-                d="M5 10l7-7m0 0l7 7m-7-7v18" // Corrected path for arrow up
+                d="M5 10l7-7m0 0l7 7m-7-7v18"
               />
             </svg>
           </button>
@@ -193,43 +222,47 @@ const VirtualList = memo(
     );
   }
 );
-VirtualList.displayName = "VirtualList";
+VirtualList.displayName = "VirtualList"; // For better debugging in React DevTools.
 
+/**
+ * VirtualGrid component for rendering items in a grid layout efficiently.
+ * Similar to VirtualList but arranges items in rows and columns.
+ */
 export const VirtualGrid = memo(
-  // Exporting VirtualGrid as named export
   ({
     items,
-    itemHeight, // Height of an individual item card
-    itemsPerRow,
+    itemHeight, // Height of an individual item card.
+    itemsPerRow, // Number of items per row in the grid.
     containerHeight,
     renderItem,
-    gap = 16, // Gap between grid items
+    gap = 16, // Gap (in pixels) between grid items.
     className = "",
     onLoadMore,
     hasMore = false,
     isLoading = false,
     emptyComponent,
-    // No isScrolling prop for VirtualGrid in original
   }) => {
     const [scrollTop, setScrollTop] = useState(0);
     const scrollElementRef = useRef(null);
 
-    const rowHeight = itemHeight + gap; // Total height of a row including the gap below it
+    const rowHeight = itemHeight + gap; // Total height of a row including the gap.
     const totalRows = Math.ceil(items.length / itemsPerRow);
-    const totalHeight = totalRows * rowHeight - (totalRows > 0 ? gap : 0); // Adjust total height to remove last row's bottom gap
+    // Adjust total height to remove the gap after the last row.
+    const totalHeight = totalRows * rowHeight - (totalRows > 0 ? gap : 0);
 
-    // Calculate visible range (overscanning might be beneficial here too, not in original)
+    // Calculate the range of rows to render.
     const startRow = Math.max(0, Math.floor(scrollTop / rowHeight));
     const endRow = Math.min(
       totalRows - 1,
       Math.ceil((scrollTop + containerHeight) / rowHeight)
     );
 
+    // Calculate the start and end indices of items within the visible rows.
     const startIndex = startRow * itemsPerRow;
     const endIndex = Math.min(items.length - 1, (endRow + 1) * itemsPerRow - 1);
 
     const visibleItems = items.slice(startIndex, endIndex + 1);
-    const offsetY = startRow * rowHeight;
+    const offsetY = startRow * rowHeight; // Vertical offset for the grid of visible items.
 
     const handleScroll = useCallback(
       (e) => {
@@ -268,6 +301,7 @@ export const VirtualGrid = memo(
         onScroll={handleScroll}
       >
         <div style={{ height: totalHeight, position: "relative" }}>
+          {/* Container for the visible grid items, offset by `offsetY`. */}
           <div
             style={{
               transform: `translateY(${offsetY}px)`,
@@ -277,19 +311,20 @@ export const VirtualGrid = memo(
               right: 0,
             }}
           >
+            {/* CSS Grid for arranging items. */}
             <div
               className="grid"
               style={{
                 gridTemplateColumns: `repeat(${itemsPerRow}, 1fr)`,
                 gap: `${gap}px`,
-                padding: `0 ${gap / 2}px`, // Optional: add padding to sides if gap is only between items
+                // Optional padding if gap is only between items.
+                padding: `0 ${gap / 2}px`,
               }}
             >
               {visibleItems.map((item, index) => (
-                // The key should be stable, item.id is preferred
                 <div
                   key={item.id || `virtual-grid-item-${startIndex + index}`}
-                  style={{ height: itemHeight }} // This div now represents the cell, item rendering is inside
+                  style={{ height: itemHeight }} // Each grid cell has the itemHeight.
                 >
                   {renderItem(item, startIndex + index)}
                 </div>
@@ -297,14 +332,15 @@ export const VirtualGrid = memo(
             </div>
           </div>
 
+          {/* Loading indicator at the bottom. */}
           {isLoading && (
             <div
               style={{
                 position: "absolute",
-                bottom: 0, // Adjust if loading indicator needs to be after last row
+                bottom: 0,
                 left: 0,
                 right: 0,
-                height: itemHeight, // Or a fixed height for loading indicator
+                height: itemHeight, // Or a fixed height for the loader.
               }}
               className="flex items-center justify-center"
             >
@@ -318,4 +354,4 @@ export const VirtualGrid = memo(
 );
 VirtualGrid.displayName = "VirtualGrid";
 
-export default VirtualList; // VirtualList is the default export
+export default VirtualList; // VirtualList is the default export.

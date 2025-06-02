@@ -1,46 +1,58 @@
-// project/src/components/Items/ItemQuestions/ItemQuestions.jsx
 import React, { useState, useEffect, useCallback } from "react";
 import QuestionList from "./QuestionList";
-import qaService from "../../../services/qaService"; // Adjust path
-// UserCircleIcon is now used within QuestionItem
-// formatRelativeTime is now used within QuestionItem
+import qaService from "../../../services/qaService"; // Service for Q&A backend operations
 
+/**
+ * @component ItemQuestions
+ * @description Manages the display and interaction for item-specific questions and answers.
+ * It handles fetching questions, posting new questions, and submitting answers.
+ *
+ * @param {object} props - The properties passed to the component.
+ * @param {object} props.item - The item object for which questions are being displayed. Must have `id` and `userId`.
+ * @param {object} props.user - The currently authenticated user object (referred to as `currentUser` internally).
+ * @param {Function} [props.showMessage] - Callback function to display messages (e.g., success, error).
+ * @param {boolean} [props.isLostAndFound=false] - Flag indicating if the item is from the Lost & Found section.
+ * @returns {JSX.Element} The questions and answers section for an item.
+ */
 const ItemQuestions = ({
   item,
-  user: currentUser,
+  user: currentUser, // Renaming for clarity within the component
   showMessage,
   isLostAndFound = false,
 }) => {
   const [questions, setQuestions] = useState([]);
   const [newQuestionText, setNewQuestionText] = useState("");
-  const [answerTextMap, setAnswerTextMap] = useState({}); // Changed from answerText to answerTextMap
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSubmittingQuestion, setIsSubmittingQuestion] = useState(false); // Renamed for clarity
+  const [answerTextMap, setAnswerTextMap] = useState({}); // Maps questionId to answer text
+  const [isLoading, setIsLoading] = useState(true); // For fetching questions
+  const [isSubmittingQuestion, setIsSubmittingQuestion] = useState(false);
   const [isSubmittingAnswer, setIsSubmittingAnswer] = useState(false);
 
-  // Editing State
+  // State for managing editing of questions and answers
   const [editingQuestionId, setEditingQuestionId] = useState(null); // ID of question being edited
   const [editingAnswerQuestionId, setEditingAnswerQuestionId] = useState(null); // ID of question whose answer is being edited
-  const [editText, setEditText] = useState(""); // Text for the item being edited
+  const [editText, setEditText] = useState(""); // Text for the question or answer being edited
 
-  const itemType = isLostAndFound ? "lostfound" : "sell";
-  const itemOwnerId = item?.userId;
+  const itemType = isLostAndFound ? "lostfound" : "sell"; // Determine item type for service calls
+  const itemOwnerId = item?.userId; // ID of the user who posted the item
 
+  // Effect to fetch questions when the item or itemType changes
   useEffect(() => {
+    /**
+     * Fetches questions for the current item.
+     */
     const fetchQuestionsLocal = async () => {
-      // Renamed to avoid conflict if qaService.fetchQuestions exists
-      if (!item || !item.id) return;
+      if (!item || !item.id) return; // Ensure item and item.id are available
       setIsLoading(true);
       try {
         const fetchedQuestions = await qaService.getQuestions(
           item.id,
           itemType
         );
-        setQuestions(fetchedQuestions || []);
+        setQuestions(fetchedQuestions || []); // Ensure questions is an array
       } catch (error) {
         console.error("Error fetching questions:", error);
         showMessage?.("Could not load questions. Please try again.", "error");
-        setQuestions([]);
+        setQuestions([]); // Reset to empty on error
       } finally {
         setIsLoading(false);
       }
@@ -48,6 +60,10 @@ const ItemQuestions = ({
     fetchQuestionsLocal();
   }, [item, itemType, showMessage]);
 
+  /**
+   * Handles posting a new question.
+   * @type {Function}
+   */
   const handlePostQuestion = useCallback(async () => {
     if (!currentUser) {
       showMessage?.("Please log in to ask questions.", "info");
@@ -68,8 +84,8 @@ const ItemQuestions = ({
           currentUser.displayName || currentUser.email || "Anonymous User",
       };
       const newQuestion = await qaService.addQuestion(questionData);
-      setQuestions((prevQuestions) => [newQuestion, ...prevQuestions]);
-      setNewQuestionText("");
+      setQuestions((prevQuestions) => [newQuestion, ...prevQuestions]); // Add new question to the top
+      setNewQuestionText(""); // Clear input field
       showMessage?.("Your question has been posted successfully.", "success");
     } catch (error) {
       console.error("Error posting question:", error);
@@ -79,10 +95,21 @@ const ItemQuestions = ({
     }
   }, [currentUser, newQuestionText, item, itemType, showMessage]);
 
+  /**
+   * Updates the answer text for a specific question in the local state.
+   * @param {string} questionId - The ID of the question.
+   * @param {string} text - The new answer text.
+   * @type {Function}
+   */
   const handleAnswerTextChange = useCallback((questionId, text) => {
-    setAnswerTextMap((prev) => ({ ...prev, [questionId]: text }));
+    setAnswerTextMap((prevMap) => ({ ...prevMap, [questionId]: text }));
   }, []);
 
+  /**
+   * Handles submitting an answer for a specific question.
+   * @param {string} questionId - The ID of the question to answer.
+   * @type {Function}
+   */
   const handleSubmitAnswer = useCallback(
     async (questionId) => {
       if (!currentUser) {
@@ -103,6 +130,7 @@ const ItemQuestions = ({
             currentUser.displayName || currentUser.email || "Anonymous User",
         };
         await qaService.answerQuestion(questionId, answerData);
+        // Update the local state to reflect the new answer
         setQuestions((prevQuestions) =>
           prevQuestions.map((q) =>
             q.id === questionId
@@ -111,13 +139,13 @@ const ItemQuestions = ({
                   answerText: answerData.answerText,
                   answerUserId: answerData.userId,
                   answerUserName: answerData.userName,
-                  answeredAt: new Date(),
+                  answeredAt: new Date(), // Timestamp for when answered
                   answered: true,
                 }
               : q
           )
         );
-        setAnswerTextMap((prev) => ({ ...prev, [questionId]: "" }));
+        setAnswerTextMap((prevMap) => ({ ...prevMap, [questionId]: "" })); // Clear answer input
         showMessage?.("Your answer has been posted successfully.", "success");
       } catch (error) {
         console.error("Error posting answer:", error);
@@ -129,8 +157,14 @@ const ItemQuestions = ({
     [currentUser, answerTextMap, showMessage]
   );
 
+  /**
+   * Handles deleting a question.
+   * @param {string} questionId - The ID of the question to delete.
+   * @type {Function}
+   */
   const handleDeleteQuestion = useCallback(
     async (questionId) => {
+      // Basic confirmation before deleting
       if (
         !currentUser ||
         !window.confirm("Are you sure you want to delete this question?")
@@ -139,7 +173,7 @@ const ItemQuestions = ({
       try {
         await qaService.deleteQuestion(questionId);
         setQuestions((prevQuestions) =>
-          prevQuestions.filter((q) => q.id !== questionId)
+          prevQuestions.filter((q) => q.id !== questionId) // Remove question from local state
         );
         showMessage?.("Question deleted successfully.", "success");
       } catch (error) {
@@ -150,38 +184,64 @@ const ItemQuestions = ({
     [currentUser, showMessage]
   );
 
-  // Editing Handlers
+  // --- Edit Handlers ---
+
+  /**
+   * Initiates editing mode for a question.
+   * @param {string} questionId - The ID of the question to edit.
+   * @param {string} currentText - The current text of the question.
+   * @type {Function}
+   */
   const handleStartEditQuestion = useCallback((questionId, currentText) => {
-    setEditingAnswerQuestionId(null); // Clear answer edit mode
+    setEditingAnswerQuestionId(null); // Ensure not in answer edit mode
     setEditingQuestionId(questionId);
     setEditText(currentText);
   }, []);
 
+  /**
+   * Initiates editing mode for an answer.
+   * @param {string} questionId - The ID of the question whose answer is to be edited.
+   * @param {string} currentText - The current text of the answer.
+   * @type {Function}
+   */
   const handleStartEditAnswer = useCallback((questionId, currentText) => {
-    setEditingQuestionId(null); // Clear question edit mode
+    setEditingQuestionId(null); // Ensure not in question edit mode
     setEditingAnswerQuestionId(questionId);
     setEditText(currentText);
   }, []);
 
+  /**
+   * Updates the text being edited.
+   * @param {React.ChangeEvent<HTMLTextAreaElement>} e - The change event from the textarea.
+   * @type {Function}
+   */
   const handleEditTextChange = useCallback((e) => {
     setEditText(e.target.value);
   }, []);
 
+  /**
+   * Cancels the current editing mode (for question or answer).
+   * @type {Function}
+   */
   const handleCancelEdit = useCallback(() => {
     setEditingQuestionId(null);
     setEditingAnswerQuestionId(null);
     setEditText("");
   }, []);
 
+  /**
+   * Saves the edited question.
+   * @type {Function}
+   */
   const handleSaveEditQuestion = useCallback(async () => {
     if (!editingQuestionId || !editText.trim()) return;
-    // Consider adding a submitting state for edits if async operation is long
+    // Consider adding a submitting state specifically for edits if operations are long
     try {
       await qaService.editQuestion(editingQuestionId, editText.trim());
       setQuestions((prevQuestions) =>
         prevQuestions.map((q) =>
           q.id === editingQuestionId
-            ? { ...q, questionText: editText.trim(), updatedAt: new Date() }
+            ? { ...q, questionText: editText.trim(), updatedAt: new Date() } // Update local state
             : q
         )
       );
@@ -193,15 +253,18 @@ const ItemQuestions = ({
     }
   }, [editingQuestionId, editText, showMessage, handleCancelEdit]);
 
+  /**
+   * Saves the edited answer.
+   * @type {Function}
+   */
   const handleSaveEditAnswer = useCallback(async () => {
     if (!editingAnswerQuestionId || !editText.trim()) return;
-    // Consider adding a submitting state for edits
     try {
       await qaService.editAnswer(editingAnswerQuestionId, editText.trim());
       setQuestions((prevQuestions) =>
         prevQuestions.map((q) =>
           q.id === editingAnswerQuestionId
-            ? { ...q, answerText: editText.trim(), answerUpdatedAt: new Date() }
+            ? { ...q, answerText: editText.trim(), answerUpdatedAt: new Date() } // Update local state
             : q
         )
       );
@@ -213,11 +276,15 @@ const ItemQuestions = ({
     }
   }, [editingAnswerQuestionId, editText, showMessage, handleCancelEdit]);
 
+  // Display loading skeleton if questions are being fetched
   if (isLoading) {
     return (
-      <div className="py-2 animate-pulse">
+      <div className="py-2 animate-pulse" aria-live="polite" aria-busy="true">
+        {/* Skeleton for section title */}
         <div className="h-4 bg-gray-200 rounded w-1/3 mb-2"></div>
+        {/* Skeleton for question input area */}
         <div className="h-20 bg-gray-100 rounded mb-4"></div>
+        {/* Skeleton for a question item */}
         <div className="h-4 bg-gray-200 rounded w-1/4 mb-2"></div>
         <div className="h-16 bg-gray-100 rounded"></div>
       </div>
@@ -230,6 +297,7 @@ const ItemQuestions = ({
         Questions & Answers
       </h4>
 
+      {/* Input area for posting a new question (visible if user is logged in) */}
       {currentUser ? (
         <div className="mb-4">
           <textarea
@@ -239,6 +307,7 @@ const ItemQuestions = ({
             value={newQuestionText}
             onChange={(e) => setNewQuestionText(e.target.value)}
             disabled={isSubmittingQuestion}
+            aria-label="Ask a question"
           />
           <button
             onClick={handlePostQuestion}
@@ -249,8 +318,9 @@ const ItemQuestions = ({
           </button>
         </div>
       ) : (
+        // Prompt to log in if user is not authenticated
         <p className="text-sm text-gray-500 mb-4">
-          <button // Changed from <a> to <button> for actions if not navigating
+          <button
             onClick={() =>
               showMessage?.("Please log in to ask questions.", "info")
             }
@@ -262,6 +332,7 @@ const ItemQuestions = ({
         </p>
       )}
 
+      {/* List of questions and answers */}
       <QuestionList
         questions={questions}
         currentUser={currentUser}
@@ -270,6 +341,7 @@ const ItemQuestions = ({
         onAnswerTextChange={handleAnswerTextChange}
         onSubmitAnswer={handleSubmitAnswer}
         isSubmittingAnswer={isSubmittingAnswer}
+        // Props for editing questions and answers
         editingQuestionId={editingQuestionId}
         editingAnswerQuestionId={editingAnswerQuestionId}
         editText={editText}
@@ -279,6 +351,7 @@ const ItemQuestions = ({
         onCancelEdit={handleCancelEdit}
         onStartEditQuestion={handleStartEditQuestion}
         onStartEditAnswer={handleStartEditAnswer}
+        // Prop for deleting questions
         onDeleteQuestion={handleDeleteQuestion}
       />
     </div>

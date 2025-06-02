@@ -1,7 +1,8 @@
-// src/components/Items/ItemForm/ItemForm.jsx
 import React, { useState, useEffect, useCallback } from "react";
-import { auth, Timestamp } from "../../../firebase.jsx";
-import firebaseService from "../../../services/firebaseService.js"; // Used by the hook, not directly here for uploads
+// Firebase services and utilities are imported for data handling
+import { Timestamp } from "../../../firebase.jsx"; // Assuming Timestamp is directly from firebase.jsx
+// firebaseService seems to be implicitly used by a hook, not directly for uploads here
+// import firebaseService from "../../../services/firebaseService.js";
 import { CATEGORIES, LIMITS, ITEM_STATUS } from "../../../config/constants.js";
 import ItemFormFields from "./ItemFormFields.jsx";
 import ItemFormActions from "./ItemFormActions.jsx";
@@ -9,31 +10,56 @@ import { validateImageFile, validateWhatsApp } from "../../../utils/helpers.js";
 import { compressImage } from "../../../utils/imageOptimizer.js";
 import LoadingSpinner from "../../UI/LoadingSpinner.jsx";
 
+/**
+ * @component ItemForm
+ * @description A comprehensive form for creating or editing items. It handles data input,
+ * image uploads (with compression and validation), and submission logic.
+ *
+ * @param {object} props - The properties passed to the component.
+ * @param {Function} props.onSubmit - Callback function to handle the form submission.
+ * This is typically a hook's `handleSubmitItem` function.
+ * @param {object} [props.initialData={}] - Initial data for the form, used when editing an existing item.
+ * @param {string} [props.type="sell"] - The type of item form ('sell' or 'lostfound').
+ * @param {Function} [props.onFormProcessing] - Callback to indicate if the form is currently processing (e.g., submitting, image processing).
+ * @param {Function} [props.showMessage] - Optional callback to display user feedback messages. (Currently commented out in original)
+ * @returns {JSX.Element} The item creation/editing form.
+ */
 const ItemForm = ({
-  onSubmit, // This is the hook's handleSubmitItem
+  onSubmit,
   initialData = {},
-  type = "sell",
+  type = "sell", // 'sell' or 'lostfound'
   onFormProcessing,
-  // showMessage, // Optional prop for feedback
+  // showMessage, // Optional prop for providing feedback to the user
 }) => {
+  // State for form field data
   const [formData, setFormData] = useState({
-    /* ... */
+    name: "",
+    description: "",
+    price: "",
+    category: "",
+    whatsappNumber: "",
+    lastSeenLocation: "",
+    dateFound: "",
+    // Add other fields as necessary based on your schema
   });
-  const [imageFiles, setImageFiles] = useState([]); // Holds NEW File objects (compressed)
-  const [imagePreviews, setImagePreviews] = useState([]); // Holds URLs for display (initial http/https or new blob)
+  // State for new image files (File objects, compressed)
+  const [imageFiles, setImageFiles] = useState([]);
+  // State for image preview URLs (can be existing HTTPS URLs or new blob URLs)
+  const [imagePreviews, setImagePreviews] = useState([]);
 
-  // Stores initial images as {url: string, path: string | null}
+  // State to store initial images (from initialData) as objects {url: string, path: string | null}
   const [initialImages, setInitialImages] = useState([]);
-  // Stores storage paths of initial images marked by user for removal
+  // State to store storage paths of initial images that the user marks for removal during an edit
   const [removedInitialImagePaths, setRemovedInitialImagePaths] = useState([]);
 
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isProcessingImages, setIsProcessingImages] = useState(false);
-  const [error, setError] = useState("");
-  const isEditMode = !!initialData.id;
+  const [isSubmitting, setIsSubmitting] = useState(false); // True when form is being submitted
+  const [isProcessingImages, setIsProcessingImages] = useState(false); // True when new images are being processed
+  const [error, setError] = useState(""); // Form-level error message
+  const isEditMode = !!initialData.id; // True if initialData has an ID, indicating an edit operation
 
+  // Effect to initialize form data when initialData or type changes (e.g., when opening an edit form)
   useEffect(() => {
-    const defaultDate = new Date().toISOString().split("T")[0];
+    const defaultDate = new Date().toISOString().split("T")[0]; // Default date for "found" items
     setFormData({
       name: initialData.name || "",
       description: initialData.description || "",
@@ -41,49 +67,64 @@ const ItemForm = ({
       category: initialData.category || "",
       whatsappNumber: initialData.whatsappNumber || "",
       lastSeenLocation: initialData.lastSeenLocation || "",
-      dateFound: initialData.dateFound?.seconds
+      dateFound: initialData.dateFound?.seconds // Convert Firestore Timestamp to YYYY-MM-DD
         ? new Date(initialData.dateFound.seconds * 1000)
             .toISOString()
             .split("T")[0]
-        : type === "lostfound" &&
+        : type === "lostfound" && // Set default date for new "found" items
           (initialData.status === ITEM_STATUS.FOUND ||
-            initialData.status === "found") &&
+            initialData.status === "found") && // Check status explicitly
           !isEditMode
         ? defaultDate
         : "",
     });
 
+    // Process initial images for previews and tracking
     const currentInitialImages = (initialData.imageUrls || []).map(
       (url, index) => ({
         url,
-        path: (initialData.imageStoragePaths || [])[index] || null,
+        path: (initialData.imageStoragePaths || [])[index] || null, // Store original storage path if available
       })
     );
     setInitialImages(currentInitialImages);
-    setImagePreviews(currentInitialImages.map((img) => img.url));
+    setImagePreviews(currentInitialImages.map((img) => img.url)); // Set previews from URLs
 
-    setImageFiles([]); // Reset new files
-    setRemovedInitialImagePaths([]); // Reset removed paths
-    setError("");
+    // Reset states for new image files and removed paths
+    setImageFiles([]);
+    setRemovedInitialImagePaths([]);
+    setError(""); // Clear any previous errors
   }, [initialData, type, isEditMode]);
 
+  // Determine categories based on form type
   const categories = type === "sell" ? CATEGORIES.SELL : CATEGORIES.LOST_FOUND;
 
+  /**
+   * Handles changes to text input fields.
+   * @param {string} field - The name of the form field.
+   * @param {string} value - The new value of the field.
+   */
   const handleInputChange = useCallback(
     (field, value) => {
       setFormData((prev) => ({ ...prev, [field]: value }));
-      if (error) setError("");
+      if (error) setError(""); // Clear error on input change
     },
-    [error]
+    [error] // Dependency: error state
   );
 
+  /**
+   * Handles new image file selection, including validation and compression.
+   * @param {React.ChangeEvent<HTMLInputElement>} e - The file input change event.
+   */
   const handleImageChange = useCallback(
     async (e) => {
-      setError("");
+      setError(""); // Clear previous errors
       setIsProcessingImages(true);
+      onFormProcessing?.(true); // Notify parent that form is processing
+
       const newFilesSelected = Array.from(e.target.files);
       const countOfAlreadyStagedImages = imagePreviews.length;
 
+      // Validate maximum number of images
       if (
         countOfAlreadyStagedImages + newFilesSelected.length >
         LIMITS.MAX_IMAGES
@@ -91,13 +132,14 @@ const ItemForm = ({
         setError(
           `You can upload a maximum of ${LIMITS.MAX_IMAGES} images. You currently have ${countOfAlreadyStagedImages} and are trying to add ${newFilesSelected.length}.`
         );
-        e.target.value = null;
+        e.target.value = null; // Reset file input
         setIsProcessingImages(false);
+        onFormProcessing?.(false);
         return;
       }
 
-      const newlyProcessedFiles = [];
-      const newBlobPreviews = [];
+      const newlyProcessedFiles = []; // Store successfully processed File objects
+      const newBlobPreviews = []; // Store blob URLs for new image previews
 
       for (const file of newFilesSelected) {
         const validation = validateImageFile(file, LIMITS.MAX_IMAGE_SIZE);
@@ -105,13 +147,13 @@ const ItemForm = ({
           console.warn(
             `Skipping invalid file ${file.name}: ${validation.error}`
           );
-          // showMessage?.(`Skipped invalid file: ${file.name}`, "warning");
-          continue;
+          // showMessage?.(`Skipped invalid file: ${file.name} (${validation.error})`, "warning");
+          continue; // Skip invalid files
         }
         try {
-          const compressedFile = await compressImage(file);
+          const compressedFile = await compressImage(file); // Compress the image
           newlyProcessedFiles.push(compressedFile);
-          newBlobPreviews.push(URL.createObjectURL(compressedFile));
+          newBlobPreviews.push(URL.createObjectURL(compressedFile)); // Create blob URL for preview
         } catch (compressionError) {
           console.error(
             "Error compressing image:",
@@ -119,66 +161,77 @@ const ItemForm = ({
             compressionError
           );
           // showMessage?.(`Could not process image ${file.name}. Using original.`, "warning");
-          newlyProcessedFiles.push(file); // Fallback to original
+          // Fallback to original file if compression fails
+          newlyProcessedFiles.push(file);
           newBlobPreviews.push(URL.createObjectURL(file));
         }
       }
 
+      // Update state with newly processed files and previews
       if (newlyProcessedFiles.length > 0) {
-        setImageFiles((prev) => [...prev, ...newlyProcessedFiles]);
-        setImagePreviews((prev) => [...prev, ...newBlobPreviews]);
+        setImageFiles((prevFiles) => [...prevFiles, ...newlyProcessedFiles]);
+        setImagePreviews((prevPreviews) => [
+          ...prevPreviews,
+          ...newBlobPreviews,
+        ]);
       }
 
-      e.target.value = null;
+      e.target.value = null; // Reset file input to allow re-selection of the same file
       setIsProcessingImages(false);
+      onFormProcessing?.(false);
     },
-    [imagePreviews.length, LIMITS.MAX_IMAGES /*, showMessage */]
+    [
+      imagePreviews.length,
+      LIMITS.MAX_IMAGES,
+      LIMITS.MAX_IMAGE_SIZE,
+      onFormProcessing /*, showMessage*/,
+    ]
   );
 
+  /**
+   * Removes an image from the preview list and manages related state for new or existing images.
+   * @param {number} indexToRemove - The index of the image preview to remove.
+   */
   const removeImage = useCallback(
     (indexToRemove) => {
       const previewToRemove = imagePreviews[indexToRemove];
-      URL.revokeObjectURL(previewToRemove); // Clean up blob URL if it is one
+      if (previewToRemove.startsWith("blob:")) {
+        URL.revokeObjectURL(previewToRemove); // Clean up blob URL to prevent memory leaks
+      }
 
-      setImagePreviews((prev) => prev.filter((_, i) => i !== indexToRemove));
+      setImagePreviews((prevPreviews) =>
+        prevPreviews.filter((_, i) => i !== indexToRemove)
+      );
 
-      // Check if the removed preview was from initialImages or imageFiles
+      // Determine if the removed image was an initial (existing) image or a newly added one
       const initialImgIndex = initialImages.findIndex(
         (img) => img.url === previewToRemove
       );
+
       if (initialImgIndex > -1) {
-        // It was an existing image from initialData
+        // Image was part of initialData (an existing image)
         const removedImg = initialImages[initialImgIndex];
         if (removedImg.path) {
-          // Only add to removedInitialImagePaths if it had a path (was an uploaded image)
-          setRemovedInitialImagePaths((prev) => [...prev, removedImg.path]);
+          // If it had a storage path, mark it for deletion from Firebase Storage on submit
+          setRemovedInitialImagePaths((prevPaths) => [
+            ...prevPaths,
+            removedImg.path,
+          ]);
         }
-        // Remove from initialImages to prevent re-adding if form re-initializes with same initialData
-        setInitialImages((prev) =>
-          prev.filter((img) => img.url !== previewToRemove)
+        // Remove from initialImages state to prevent it from being re-added if form re-initializes
+        setInitialImages((prevInitial) =>
+          prevInitial.filter((img) => img.url !== previewToRemove)
         );
       } else {
-        // It was a newly added file (from imageFiles, represented by a blob URL in imagePreviews)
-        // This requires careful indexing if imagePreviews contains mixed initial and new blob URLs.
-        // A robust way is to find its corresponding File object in imageFiles and remove it.
-        // This assumes that blob URLs in imagePreviews correspond positionally to files in imageFiles
-        // AFTER the initial images' http URLs.
-
-        // Count how many non-blob URLs (initial images still in preview) are before this index
-        let nonBlobCountBefore = 0;
-        for (let i = 0; i < indexToRemove; i++) {
-          if (!imagePreviews[i].startsWith("blob:")) {
-            nonBlobCountBefore++;
-          }
-        }
-        // The index in imageFiles is indexToRemove - (count of initial images still in imagePreviews)
-        // More simply: find the file object that created this blob URL (if possible, or track by index)
-        // For now, assuming imageFiles directly correspond to the blob previews in order.
+        // Image was a newly added file (represented by a blob URL)
+        // This logic assumes that `imageFiles` corresponds to the 'blob:' previews
+        // after all non-blob (initial) previews.
         const numInitialPreviewsStillPresent = imagePreviews.filter(
-          (p) =>
-            !p.startsWith("blob:") &&
+          (p, i) =>
+            i < indexToRemove &&
             initialImages.some((initImg) => initImg.url === p)
         ).length;
+
         const fileIndexInImageFiles =
           indexToRemove - numInitialPreviewsStillPresent;
 
@@ -189,14 +242,22 @@ const ItemForm = ({
           setImageFiles((prevFiles) =>
             prevFiles.filter((_, i) => i !== fileIndexInImageFiles)
           );
+        } else {
+          // This case might occur if imagePreviews and imageFiles get out of sync,
+          // or if the removed preview was an initial image that somehow didn't match the initialImages list.
+          // It might be an edge case or indicate a logic issue in how previews/files are managed.
+          console.warn(
+            "Could not find corresponding file in imageFiles for removed preview:",
+            previewToRemove
+          );
         }
       }
     },
-    [imagePreviews, initialImages, imageFiles]
+    [imagePreviews, initialImages, imageFiles] // Dependencies
   );
 
+  // Effect to clean up blob URLs when component unmounts or previews change
   useEffect(() => {
-    // Cleanup for blob URLs
     return () => {
       imagePreviews.forEach((url) => {
         if (url && url.startsWith("blob:")) {
@@ -204,11 +265,22 @@ const ItemForm = ({
         }
       });
     };
-  }, [imagePreviews]); // Re-run if imagePreviews change
+  }, [imagePreviews]); // Re-run if imagePreviews array instance changes
 
+  /**
+   * Validates the form data.
+   * @returns {string|null} An error message if validation fails, otherwise null.
+   */
   const validateForm = useCallback(() => {
-    // ... (same validation logic)
-    const { name, description, category, price, whatsappNumber } = formData;
+    const {
+      name,
+      description,
+      category,
+      price,
+      whatsappNumber,
+      lastSeenLocation,
+      dateFound,
+    } = formData;
     if (!name.trim() || !description.trim() || !category) {
       return "Name, Description, and Category are required.";
     }
@@ -218,43 +290,98 @@ const ItemForm = ({
     ) {
       return "A valid price is required for items for sale.";
     }
+    if (type === "lostfound") {
+      if (!lastSeenLocation.trim()) {
+        return initialData.status === ITEM_STATUS.FOUND ||
+          initialData.status === "found"
+          ? "Location where item was found is required."
+          : "Last seen location is required.";
+      }
+      // Date found/lost might be optional or required depending on business logic
+      // if (!dateFound) return "Date is required for lost/found items.";
+    }
     const whatsappValidation = validateWhatsApp(whatsappNumber);
     if (!whatsappValidation.isValid) {
       return whatsappValidation.error;
     }
     if (imagePreviews.length === 0) {
+      // Must have at least one image
       return "Please upload at least one image for the item.";
     }
-    return null;
-  }, [formData, type, imagePreviews.length]);
+    if (imagePreviews.length > LIMITS.MAX_IMAGES) {
+      // Double check max images, though handleImageChange should prevent this
+      return `You can upload a maximum of ${LIMITS.MAX_IMAGES} images.`;
+    }
+    return null; // No errors
+  }, [
+    formData,
+    type,
+    imagePreviews.length,
+    initialData.status,
+    LIMITS.MAX_IMAGES,
+  ]);
 
+  /**
+   * Handles the form submission process.
+   * @param {React.FormEvent<HTMLFormElement>} e - The form submission event.
+   */
   const handleSubmit = useCallback(
     async (e) => {
-      e.preventDefault();
+      e.preventDefault(); // Prevent default form submission
       const validationError = validateForm();
       if (validationError) {
         setError(validationError);
         return;
       }
       if (isProcessingImages) {
+        // Prevent submission if images are still processing
         setError("Please wait for images to finish processing.");
         return;
       }
 
       setIsSubmitting(true);
-      onFormProcessing?.(true);
+      onFormProcessing?.(true); // Notify parent about processing start
+
+      // Prepare data for submission
+      let dataToSubmit = { ...formData };
+      if (type === "sell") {
+        dataToSubmit.price = parseFloat(dataToSubmit.price);
+        delete dataToSubmit.lastSeenLocation;
+        delete dataToSubmit.dateFound;
+      } else {
+        // lostfound
+        delete dataToSubmit.price;
+        // Convert dateFound to Firestore Timestamp if it's a string
+        if (
+          dataToSubmit.dateFound &&
+          typeof dataToSubmit.dateFound === "string"
+        ) {
+          // Assuming dateFound is in 'YYYY-MM-DD' format from the input type="date"
+          dataToSubmit.dateFound = Timestamp.fromDate(
+            new Date(dataToSubmit.dateFound)
+          );
+        } else if (!dataToSubmit.dateFound) {
+          // If dateFound is empty, remove it or set to null, depending on backend requirements
+          delete dataToSubmit.dateFound;
+        }
+        // Add status for lost/found items if it's part of initialData or needs to be set
+        if (initialData.status) {
+          dataToSubmit.status = initialData.status;
+        }
+      }
 
       try {
-        // onSubmit (the hook's handleSubmitItem) will now handle uploads and structuring final data
+        // The onSubmit prop (from parent, likely useSubmitItem hook) handles the actual submission logic,
+        // including uploading new images and deleting removed initial images.
         await onSubmit(
-          formData, // Current form text data
-          imageFiles, // NEW files (already compressed) to be uploaded
-          isEditMode ? removedInitialImagePaths : [] // Paths of EXISTING images to be deleted (only in edit mode)
+          dataToSubmit,
+          imageFiles, // New File objects to be uploaded
+          isEditMode ? removedInitialImagePaths : [] // Paths of existing images to delete (only in edit mode)
         );
 
         // Reset form state after successful submission
         if (!isEditMode) {
-          // Full reset for new items
+          // Full reset for new item creation
           setFormData({
             name: "",
             description: "",
@@ -266,52 +393,61 @@ const ItemForm = ({
           });
           setImageFiles([]);
           setImagePreviews([]);
-          setInitialImages([]);
-          setRemovedInitialImagePaths([]);
-        } else {
-          // Partial reset for edited items (newly added files processed, removed paths handled)
-          setImageFiles([]); // Clear newly added files as they are now "existing" or uploaded
-          setRemovedInitialImagePaths([]); // These have been processed
-          // The parent component (e.g., SellingSection) will close the modal,
-          // and if re-opened, initialData will be fresh.
+          setInitialImages([]); // Also clear initial images tracking for new form
         }
+        // For edit mode, the parent component (e.g., a modal) typically closes,
+        // and if reopened, initialData will be fresh. So, no full reset needed here,
+        // but imageFiles (newly added) and removedInitialImagePaths are cleared as they've been processed.
+        setImageFiles([]);
+        setRemovedInitialImagePaths([]);
+        setError(""); // Clear any errors
+        // showMessage?.(isEditMode ? "Item updated successfully!" : "Item added successfully!", "success");
       } catch (submitError) {
         console.error("Form submission error in ItemForm:", submitError);
-        setError(`Submission failed: ${submitError.message}`);
+        setError(
+          `Submission failed: ${
+            submitError.message || "An unexpected error occurred."
+          }`
+        );
+        // showMessage?.(`Submission failed: ${submitError.message}`, "error");
       } finally {
         setIsSubmitting(false);
-        onFormProcessing?.(false);
+        onFormProcessing?.(false); // Notify parent about processing end
       }
     },
     [
       formData,
-      imageFiles, // New files to upload
-      removedInitialImagePaths, // Existing image paths to delete
+      imageFiles,
+      removedInitialImagePaths,
       isEditMode,
+      type,
       validateForm,
       onSubmit,
       onFormProcessing,
-      initialData, // Needed for context if resetting or for initial status
+      initialData.status, // Include if status logic depends on it
+      // showMessage // Include if using showMessage
     ]
   );
 
+  // Dynamic labels and placeholders for Lost & Found fields
+  const currentItemStatus =
+    initialData.status || (type === "lostfound" ? ITEM_STATUS.LOST : ""); // Default to LOST if creating new L&F
   const lfLocationLabel =
-    initialData.status === ITEM_STATUS.FOUND || initialData.status === "found"
+    currentItemStatus === ITEM_STATUS.FOUND
       ? "Where Found *"
       : "Last Seen Location *";
   const lfLocationPlaceholder =
-    initialData.status === ITEM_STATUS.FOUND || initialData.status === "found"
-      ? "Where was the item found?"
-      : "Where was it last seen?";
+    currentItemStatus === ITEM_STATUS.FOUND
+      ? "E.g., Building A, Room 101"
+      : "E.g., Near the library";
   const lfDateLabel =
-    initialData.status === ITEM_STATUS.FOUND || initialData.status === "found"
-      ? "Date Found"
-      : "Date Lost";
+    currentItemStatus === ITEM_STATUS.FOUND ? "Date Found" : "Date Lost";
   const lfDateHelperText =
-    initialData.status === ITEM_STATUS.FOUND || initialData.status === "found"
-      ? "Date when the item was found"
-      : "Date when the item was lost";
+    currentItemStatus === ITEM_STATUS.FOUND
+      ? "Approximate date when the item was found."
+      : "Approximate date when the item was lost.";
 
+  // Display loading spinner if submitting or processing images
   if (isSubmitting || isProcessingImages) {
     return (
       <LoadingSpinner
@@ -327,33 +463,40 @@ const ItemForm = ({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6 p-1">
+    <form onSubmit={handleSubmit} className="space-y-6 p-1" noValidate>
+      {/* Display form-level error messages */}
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-lg text-sm">
+        <div
+          className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-lg text-sm"
+          role="alert"
+        >
           {error}
         </div>
       )}
+      {/* Render form fields */}
       <ItemFormFields
         formData={formData}
         type={type}
-        initialDataStatus={initialData.status}
+        initialDataStatus={currentItemStatus} // Pass current status for dynamic fields
         categories={categories}
         LIMITS={LIMITS}
         imagePreviews={imagePreviews}
         onInputChange={handleInputChange}
         onImageChange={handleImageChange}
         onRemoveImage={removeImage}
+        // Pass dynamic labels and placeholders for Lost & Found
         lfLocationLabel={lfLocationLabel}
         lfLocationPlaceholder={lfLocationPlaceholder}
         lfDateLabel={lfDateLabel}
         lfDateHelperText={lfDateHelperText}
       />
+      {/* Render form actions (submit button) */}
       <ItemFormActions
-        isSubmitting={isSubmitting || isProcessingImages}
+        isSubmitting={isSubmitting || isProcessingImages} // Disable button during processing
         isEditMode={isEditMode}
         type={type}
-        initialDataStatus={initialData.status}
-        hasImages={imagePreviews.length > 0}
+        initialDataStatus={currentItemStatus}
+        hasImages={imagePreviews.length > 0} // Enable submit only if images are present
       />
     </form>
   );

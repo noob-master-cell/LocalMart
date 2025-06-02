@@ -1,25 +1,41 @@
 // src/pages/selling/components/SellingHeader.jsx
+// This component renders the header for the user's "Items for Sale" page.
+// It displays a title, a brief description, the current global search term (if any)
+// with an option to clear it, and a button to list a new item.
 
 import React from "react";
-import PlusCircleIcon from "./../../../components/icons/PlusCircleIcon.jsx"; // Adjust path as needed
-// You might also need a SearchIcon or XCircleIcon if you directly handle parts of global search display here
+// Icon for the "List New Item" button.
+import PlusCircleIcon from "./../../../components/icons/PlusCircleIcon.jsx";
+// SVG icons for search and clear search could also be imported or defined directly.
 
+/**
+ * SellingHeader component.
+ * @param {object} props - The component's props.
+ * @param {object|null} props.user - The current authenticated user. Used to conditionally show the "List New Item" button.
+ * @param {string} props.globalSearchTerm - The current global search term active in the application.
+ * @param {Function} props.onClearGlobalSearch - Callback function to clear the global search term.
+ * @param {Function} props.onOpenAddModal - Callback function to open the modal for adding a new item.
+ */
 const SellingHeader = ({
-  user, // To conditionally enable/disable the "List New Item" button or for other UI logic
+  user,
   globalSearchTerm,
-  onClearGlobalSearch, // Callback to clear the global search term
-  onOpenAddModal, // Callback to open the modal for adding a new item
+  onClearGlobalSearch,
+  onOpenAddModal,
 }) => {
   return (
+    // Flex container for layout, responsive (column on small screens, row on larger).
     <div className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-3">
+      {/* Left side: Title and search term display */}
       <div className="text-center sm:text-left">
         <h2 className="text-2xl sm:text-3xl font-bold text-gray-800">
           Your Items for Sale
         </h2>
         <p className="text-gray-600 mt-1">Manage your marketplace listings</p>
+
+        {/* Display the current global search term if it's active */}
         {globalSearchTerm && (
           <div className="mt-3 inline-flex items-center space-x-2 bg-blue-50 border border-blue-200 rounded-lg px-3 py-1">
-            {/* You might want a SearchIcon here */}
+            {/* Search Icon */}
             <svg
               className="w-4 h-4 text-blue-600"
               fill="none"
@@ -36,12 +52,13 @@ const SellingHeader = ({
             <span className="text-sm text-blue-800">
               Searching: <strong>"{globalSearchTerm}"</strong>
             </span>
+            {/* Button to clear the global search term */}
             <button
               onClick={onClearGlobalSearch}
               className="text-blue-600 hover:text-blue-800"
               title="Clear search"
             >
-              {/* You might want an XCircleIcon here */}
+              {/* Clear Search Icon (X) */}
               <svg
                 className="w-3 h-3"
                 fill="none"
@@ -59,12 +76,14 @@ const SellingHeader = ({
           </div>
         )}
       </div>
-      {user && ( // Only show add button if user is logged in
+
+      {/* Right side: "List New Item" button, shown only if a user is logged in */}
+      {user && (
         <button
           onClick={onOpenAddModal}
           className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 px-5 rounded-lg shadow-md flex items-center space-x-2 transition-all hover:shadow-lg"
         >
-          <PlusCircleIcon />
+          <PlusCircleIcon /> {/* Add icon */}
           <span>List New Item</span>
         </button>
       )}

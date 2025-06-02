@@ -1,31 +1,65 @@
-// project/src/components/index.js
-import AuthRedirector from "./Auth/AuthRedirector"; // Assuming default export from Auth/index.js or AuthRedirector.jsx
+// This file serves as a central export point for all components in the 'components' directory.
+// It allows for cleaner and more organized imports in other parts of the application.
+// For example, instead of `import Header from './components/Layout/Header'`,
+// you can use `import { Header } from './components'`.
 
-import { CompactFilterBar, SearchAndFilter } from "./Filters"; // Assuming named exports from Filters/index.js
+// --- Auth Components ---
+// AuthRedirector: Component to guide users to login/signup if required.
+import AuthRedirector from "./Auth/AuthRedirector";
 
-import { ItemCard, ItemForm, ItemQuestions, ItemDetailModal } from "./Items"; // Assuming named exports from Items/index.js
+// --- Filter Components ---
+// CompactFilterBar: A space-saving filter UI, often for mobile or secondary filtering.
+// SearchAndFilter: A more comprehensive search and filter component, possibly with a sidebar.
+import { CompactFilterBar, SearchAndFilter } from "./Filters";
 
-import { Header, Footer } from "./Layout"; // Assuming named exports from Layout/index.js
+// --- Item Display and Form Components ---
+// ItemCard: Displays a summary of an item in a card format.
+// ItemForm: Form for creating or editing items.
+// ItemQuestions: Component for displaying and managing Q&A related to an item.
+// ItemDetailModal: Modal to show detailed information about an item.
+import { ItemCard, ItemForm, ItemQuestions, ItemDetailModal } from "./Items";
 
-import { ImageViewer } from "./Media"; // Assuming named export from Media/index.js
+// --- Layout Components ---
+// Header: The main application header/navigation bar.
+// Footer: The application footer.
+import { Header, Footer } from "./Layout";
 
-import { MobileNavigation, NavLinkRouter, NotFound } from "./Navigation"; // Assuming named exports from Navigation/index.js
+// --- Media Components ---
+// ImageViewer: Component for viewing images, possibly with zoom/carousel features.
+import { ImageViewer } from "./Media";
 
+// --- Navigation Components ---
+// MobileNavigation: Navigation bar specifically designed for mobile views.
+// NavLinkRouter: A custom NavLink component integrated with React Router.
+// NotFound: Component displayed for 404 Not Found routes.
+import { MobileNavigation, NavLinkRouter, NotFound } from "./Navigation";
+
+// --- UI Utility Components ---
+// MessageBar: Displays global messages/notifications (success, error, info).
+// Modal: A general-purpose modal/dialog component. (Note: there's a more specific Modal in UI/Modal)
+// EmptyState: Component to display when there's no content (e.g., no search results).
+// ErrorBoundary: Catches JavaScript errors in its child component tree and displays a fallback UI.
+// LoadingSpinner: A simple spinner for indicating loading states.
+// LoadingSkeletons: Placeholder UIs (skeletons) to show while content is loading.
+// SkeletonBase, ItemCardSkeleton: Specific skeleton components.
+// ProgressiveImage: Image component that loads a placeholder first, then the actual image.
 import {
   MessageBar,
-  Modal,
+  Modal, // This might refer to the older Modal or the re-export from UI/Modal
   EmptyState,
   ErrorBoundary,
   LoadingSpinner,
-  LoadingSkeletons, // This is likely the default export (PageLoadingSkeleton) from UI/LoadingSkeletons
-  SkeletonBase, // Example of a named skeleton export, add others if needed
-  ItemCardSkeleton, // Example
+  LoadingSkeletons, // Likely the default export (PageLoadingSkeleton)
+  SkeletonBase,
+  ItemCardSkeleton,
   ProgressiveImage,
-  // Add other specific named exports from UI/Modal if needed, e.g., ModalHeader
-} from "./UI"; // Assuming various exports from UI/index.js
+} from "./UI";
 
-import VirtualList, { VirtualGrid, VirtualListItem } from "./VirtualList"; // Default and named from VirtualList/index.js
+// --- Virtual List Components ---
+// VirtualList, VirtualGrid, VirtualListItem: Components for efficiently rendering large lists/grids.
+import VirtualList, { VirtualGrid, VirtualListItem } from "./VirtualList";
 
+// Export all imported components for use elsewhere in the application.
 export {
   AuthRedirector,
   CompactFilterBar,
@@ -45,11 +79,11 @@ export {
   EmptyState,
   ErrorBoundary,
   LoadingSpinner,
-  LoadingSkeletons, // Default export (PageLoadingSkeleton)
+  LoadingSkeletons,
   SkeletonBase,
   ItemCardSkeleton,
   ProgressiveImage,
-  VirtualList, // Default export
+  VirtualList,
   VirtualGrid,
   VirtualListItem,
 };

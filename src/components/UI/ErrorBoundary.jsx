@@ -1,52 +1,115 @@
 // project/src/components/UI/ErrorBoundary.jsx
 import React from "react";
 
+/**
+ * @class ErrorBoundary
+ * @extends React.Component
+ * @description A React component that catches JavaScript errors anywhere in its child component tree,
+ * logs those errors, and displays a fallback UI instead of the crashed component tree.
+ *
+ * @param {object} props - The properties passed to the component.
+ * @param {React.ReactNode} props.children - The child components that this boundary will protect.
+ * @param {Function} [props.fallbackRender] - Optional render prop to customize the fallback UI. Receives error and errorInfo.
+ */
 class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
+    /**
+     * @property {object} state - The internal state of the ErrorBoundary.
+     * @property {boolean} state.hasError - True if an error has been caught.
+     * @property {Error|null} state.error - The caught error object.
+     * @property {object|null} state.errorInfo - An object with a componentStack key containing information about which component crashed.
+     * @property {string|null} state.eventId - A unique ID generated for the error event, useful for tracking.
+     */
     this.state = {
       hasError: false,
       error: null,
       errorInfo: null,
-      eventId: null,
+      eventId: null, // For potential error reporting reference
     };
   }
 
+  /**
+   * @static
+   * @function getDerivedStateFromError
+   * @description This lifecycle method is invoked after an error has been thrown by a descendant component.
+   * It receives the error that was thrown as a parameter and should return a value to update state.
+   * @param {Error} error - The error thrown by the descendant component.
+   * @returns {object} An object to update the state, indicating an error has occurred.
+   */
   static getDerivedStateFromError(error) {
+    // Update state so the next render will show the fallback UI.
     return { hasError: true };
   }
 
+  /**
+   * @function componentDidCatch
+   * @description This lifecycle method is invoked after an error has been thrown by a descendant component.
+   * It receives two parameters: the error and information about the component stack.
+   * Used for side effects like logging the error.
+   * @param {Error} error - The error that was caught.
+   * @param {object} errorInfo - An object containing the componentStack.
+   */
   componentDidCatch(error, errorInfo) {
-    console.error("Error caught by boundary:", error, errorInfo);
+    // You can also log the error to an error reporting service
+    console.error("Error caught by ErrorBoundary:", error, errorInfo);
     this.setState({
       error,
       errorInfo,
-      eventId: Date.now().toString(),
+      eventId: Date.now().toString(), // Generate a simple event ID
     });
+
+    // Example: Send error to a service like Sentry in production
     if (process.env.NODE_ENV === "production") {
-      // Example: Sentry.captureException(error, { extra: errorInfo });
+      // Sentry.captureException(error, { extra: errorInfo, tags: { eventId: this.state.eventId } });
     }
   }
 
+  /**
+   * @function handleReload
+   * @description Reloads the current page.
+   */
   handleReload = () => {
     window.location.reload();
   };
 
+  /**
+   * @function handleGoHome
+   * @description Navigates the user to the home page.
+   */
   handleGoHome = () => {
-    window.location.href = "/";
+    window.location.href = "/"; // Or use react-router history if available
   };
 
   render() {
     if (this.state.hasError) {
+      // You can render any custom fallback UI
+      // Check if a custom fallback UI render prop is provided
+      if (typeof this.props.fallbackRender === "function") {
+        return this.props.fallbackRender({
+          error: this.state.error,
+          errorInfo: this.state.errorInfo,
+          eventId: this.state.eventId,
+          onReload: this.handleReload,
+          onGoHome: this.handleGoHome,
+        });
+      }
+
+      // Default fallback UI
       return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-100 px-4">
+        <div
+          className="min-h-screen flex items-center justify-center bg-gray-100 px-4"
+          role="alert"
+        >
           <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-6 text-center">
             <div className="mb-4">
+              {/* Error Icon */}
               <svg
                 className="mx-auto h-16 w-16 text-red-500"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
+                aria-hidden="true"
               >
                 <path
                   strokeLinecap="round"
@@ -61,19 +124,26 @@ class ErrorBoundary extends React.Component {
             </h2>
             <p className="text-gray-600 mb-6">
               We're sorry, but something unexpected happened. Please try
-              reloading the page.
+              reloading the page or returning home.
             </p>
+            {/* Display error details in development mode */}
             {process.env.NODE_ENV === "development" && this.state.error && (
-              <details className="mb-4 text-left">
-                <summary className="cursor-pointer text-sm text-gray-500 hover:text-gray-700">
-                  Error Details (Development)
+              <details className="mb-4 text-left bg-gray-50 p-2 rounded border">
+                <summary className="cursor-pointer text-sm text-gray-600 hover:text-gray-800 font-medium">
+                  Error Details (Development Mode)
                 </summary>
                 <div className="mt-2 p-3 bg-gray-100 rounded text-xs overflow-auto max-h-32">
-                  <pre>{this.state.error.toString()}</pre>
-                  <pre>{this.state.errorInfo.componentStack}</pre>
+                  <pre>
+                    <strong>Error:</strong> {this.state.error.toString()}
+                  </pre>
+                  <pre>
+                    <strong>Stack Trace:</strong>{" "}
+                    {this.state.errorInfo.componentStack}
+                  </pre>
                 </div>
               </details>
             )}
+            {/* Action buttons */}
             <div className="flex flex-col sm:flex-row gap-3">
               <button
                 onClick={this.handleReload}
@@ -88,6 +158,7 @@ class ErrorBoundary extends React.Component {
                 Go Home
               </button>
             </div>
+            {/* Display Event ID for support reference */}
             {this.state.eventId && (
               <p className="text-xs text-gray-400 mt-4">
                 Error ID: {this.state.eventId}
@@ -97,6 +168,8 @@ class ErrorBoundary extends React.Component {
         </div>
       );
     }
+
+    // If no error, render children as normal
     return this.props.children;
   }
 }

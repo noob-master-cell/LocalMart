@@ -1,108 +1,123 @@
-// src/pages/lostfound/LostAndFoundSection.jsx
+// This component serves as the main container for the Lost & Found feature.
+// It orchestrates the display of lost or found items, filters, an add/edit item modal,
+// and handles user interactions for this section.
+// It utilizes the `useLostFoundData` hook for state management and business logic.
 
-import React, { useCallback, useMemo } from "react"; // Add other React hooks if needed directly here
+import React, { useCallback, useMemo } from "react";
 
-// Hooks and Constants for this feature
+// Custom hook for managing Lost & Found data and logic.
 import useLostFoundData from "./hooks/useLostFoundData.js";
+// Constants specific to the Lost & Found feature (categories, status options).
 import {
   LOSTFOUND_CATEGORIES,
   STATUS_OPTIONS,
 } from "./hooks/lostFoundConstants.js";
 
-// Sub-components for this feature
+// Sub-components specific to this feature.
 import LostFoundHeader from "./components/LostFoundHeader.jsx";
-import ItemsList from "./components/ItemsList.jsx"; // Assuming a similar ItemsList component
-import LostFoundEmptyState from "./components/EmptyState.jsx"; // Lost & Found specific empty state
+import ItemsList from "./components/ItemsList.jsx"; // Renders L&F item cards.
+import LostFoundEmptyState from "./components/EmptyState.jsx"; // L&F specific empty state.
 
-// Globally shared components (adjust paths as per your final structure)
-import ItemForm from "./../../components/items/ItemForm/ItemForm.jsx"; // Assuming ItemForm is shared
+// Globally shared components.
+import ItemForm from "./../../components/items/ItemForm/ItemForm.jsx"; // Form for adding/editing L&F items.
 import CompactFilterBar from "./../../components/Filters/CompactFilterBar/CompactFilterBar.jsx";
-import { PageLoadingSkeleton } from "./../../components/UI/LoadingSkeletons.jsx";
-import { ITEM_STATUS } from "./../../config/constants.js"; // General ITEM_STATUS if needed by ItemForm initialData
-import Modal from "./../../components/UI/Modal/index";
+import { PageLoadingSkeleton } from "./../../components/UI/LoadingSkeletons.jsx"; // Skeleton loader.
+// General item status constants, might be used for ItemForm initial data.
+import { ITEM_STATUS } from "./../../config/constants.js";
+import Modal from "./../../components/UI/Modal/index"; // Reusable modal component.
 
+/**
+ * LostAndFoundSection component.
+ *
+ * @param {object} props - Props passed from AppLayout.
+ * @param {object|null} props.user - Currently authenticated user.
+ * @param {Function} props.showMessage - Function to display global messages.
+ * @param {Function} props.navigateToAuth - Function to navigate to authentication pages.
+ * @param {string} props.globalSearchTerm - Global search term from AppLayout.
+ * @param {Function} props.onSearchTermChange - Callback to update/clear global search term in AppLayout.
+ */
 const LostAndFoundSection = ({
-  user, // Prop from AppLayout
-  showMessage, // Prop from AppLayout
-  navigateToAuth, // Prop from AppLayout
-  globalSearchTerm, // Prop from AppLayout
-  onSearchTermChange, // Prop from AppLayout (to clear global search)
+  user,
+  showMessage,
+  navigateToAuth,
+  globalSearchTerm,
+  onSearchTermChange,
 }) => {
+  // Destructure state and functions from the useLostFoundData hook.
   const {
-    // State from hook
-    items, // Raw items for the current status
+    items, // Raw items fetched for the current L&F status (lost/found).
     loading,
-    filters, // Current filters { category, sortBy, status }
-    processedItems, // Filtered and sorted items
+    filters, // Current local filters (category, sortBy, status).
+    processedItems, // Items after applying global search and local filters.
     isModalOpen,
     editingItem,
-    isFormProcessing,
+    // isFormProcessing, // ItemForm signals its state via setIsFormProcessing.
     operationInProgress,
-    // Actions/callbacks from hook
-    setFilters, // Function to update filters
+    setFilters, // Function to update local filters.
     openAddModal,
     openEditModal,
     closeModal,
     handleSubmitItem,
     handleDeleteItem,
-    setIsFormProcessing, // For ItemForm
-  } = useLostFoundData(user, showMessage, globalSearchTerm);
+    setIsFormProcessing, // Callback for ItemForm to indicate its processing state.
+  } = useLostFoundData(user, showMessage, globalSearchTerm); // Initialize the hook.
 
-  // Callback for CompactFilterBar or LostFoundHeader filter changes
+  // Callback for filter changes from CompactFilterBar or LostFoundHeader.
   const handleFilterChange = useCallback(
     (newFilterValues) => {
-      setFilters(newFilterValues); // This will trigger re-fetch in useLostFoundData if status changes
+      setFilters(newFilterValues); // This will trigger re-fetch in useLostFoundData if status changes.
     },
-    [setFilters]
+    [setFilters] // Dependency: setFilters from the hook.
   );
 
+  // Callback to clear the global search term.
   const handleClearGlobalSearch = useCallback(() => {
     onSearchTermChange?.("");
   }, [onSearchTermChange]);
 
-  // Determine initial status for ItemForm when adding a new item
+  // Determine initial status for ItemForm when adding a new L&F item.
+  // This ensures the form defaults to the currently active L&F status (lost or found).
   const initialFormStatus = useMemo(() => {
-    // When opening the "add" modal, the form should reflect the currently active L&F status
     return filters.status === ITEM_STATUS.FOUND
       ? { status: ITEM_STATUS.FOUND }
       : { status: ITEM_STATUS.LOST };
-  }, [filters.status]);
+  }, [filters.status]); // Dependency: current status filter.
 
+  // Show a loading skeleton only on initial load for the current L&F status (lost/found).
   if (loading && items.length === 0) {
-    // Show skeleton only on initial load for the current status
     return <PageLoadingSkeleton type="lostfound" />;
   }
 
   return (
     <div className="container mx-auto px-3 py-4">
+      {/* Header for the Lost & Found section: title, item count, status toggles, add button. */}
       <LostFoundHeader
         itemCount={processedItems.length}
         globalSearchTerm={globalSearchTerm}
         onClearGlobalSearch={handleClearGlobalSearch}
         filters={filters}
-        onFilterChange={handleFilterChange} // For status buttons (lost/found)
+        onFilterChange={handleFilterChange} // Used by status (Lost/Found) buttons.
         statusOptions={STATUS_OPTIONS}
         onOpenAddModal={openAddModal}
         user={user}
         navigateToAuth={navigateToAuth}
       />
 
-      {/* CompactFilterBar for categories and sorting */}
+      {/* CompactFilterBar for categories and sorting.
+          Displayed in different positions for mobile and desktop. */}
       <div className="sm:hidden bg-white shadow-sm rounded-lg p-2 mb-4">
-        {" "}
-        {/* Mobile specific placement */}
+        {/* Mobile placement of filter bar. */}
         <CompactFilterBar
-          onFilterChange={handleFilterChange} // For category and sort
-          categories={["All", ...LOSTFOUND_CATEGORIES]}
-          showPriceFilter={false}
-          showSortOptions={true}
-          showStatusFilter={false} // Status is handled by LostFoundHeader buttons
+          onFilterChange={handleFilterChange} // For category and sort filters.
+          categories={["All", ...LOSTFOUND_CATEGORIES]} // Prepend "All" for clearing category filter.
+          showPriceFilter={false} // Price filter is not relevant for L&F.
+          showSortOptions={true} // Sorting options are relevant.
+          showStatusFilter={false} // Status is handled by LostFoundHeader buttons.
           initialFilters={filters}
         />
       </div>
       <div className="hidden sm:block mb-3">
-        {" "}
-        {/* Desktop placement */}
+        {/* Desktop placement of filter bar. */}
         <CompactFilterBar
           onFilterChange={handleFilterChange}
           categories={["All", ...LOSTFOUND_CATEGORIES]}
@@ -113,6 +128,7 @@ const LostAndFoundSection = ({
         />
       </div>
 
+      {/* Modal for adding or editing a Lost & Found item. */}
       <Modal
         isOpen={isModalOpen}
         onClose={closeModal}
@@ -123,54 +139,60 @@ const LostAndFoundSection = ({
                 filters.status === ITEM_STATUS.LOST ? "Lost" : "Found"
               } Item`
         }
-        size="lg"
+        size="lg" // Modal size.
       >
+        {/* ItemForm component within the modal. */}
         <ItemForm
           onSubmit={handleSubmitItem}
-          // For new items, initialData merges current status with empty fields
-          // For editing, editingItem is used.
+          // For new items, initialData merges current L&F status with empty fields.
+          // For editing, `editingItem` (which includes status) is used.
           initialData={editingItem || initialFormStatus}
-          type="lostfound" // Crucial for ItemForm's behavior
-          onFormProcessing={setIsFormProcessing}
+          type="lostfound" // Crucial for ItemForm's behavior and fields.
+          onFormProcessing={setIsFormProcessing} // Allows ItemForm to update processing state.
         />
       </Modal>
 
+      {/* Conditional rendering: Display empty state or the list of L&F items. */}
       {processedItems.length === 0 ? (
+        // Display LostFoundEmptyState if no items match or if DB is empty for current status.
         <LostFoundEmptyState
-          currentStatus={filters.status} // e.g., "lost" or "found"
-          isItemsEmptyForStatus={items.length === 0} // True if no items for current L/F status from DB
+          currentStatus={filters.status} // e.g., "lost" or "found".
+          isItemsEmptyForStatus={items.length === 0} // True if DB has no items for the current L&F status.
           globalSearchTerm={globalSearchTerm}
-          activeFilters={{ category: filters.category, sortBy: filters.sortBy }} // Pass local filters
+          activeFilters={{ category: filters.category, sortBy: filters.sortBy }} // Pass local filters.
           onOpenAddModal={openAddModal}
           onClearGlobalSearch={handleClearGlobalSearch}
+          // Action to clear local filters (category and sort), keeping the current status.
           onClearLocalFilters={() =>
             handleFilterChange({
               category: "",
               sortBy: "newest",
-              status: filters.status,
+              status: filters.status, // Preserve current status when clearing other local filters.
             })
           }
           user={user}
           navigateToAuth={navigateToAuth}
         />
       ) : (
-        // Assuming you'll create/reuse an ItemsList component similar to the selling feature
-        // It would need to be adapted for Lost & Found specific card actions/display
+        // Display ItemsList for Lost & Found items.
         <ItemsList
           itemsToDisplay={processedItems}
-          onOpenEditModal={openEditModal} // If L&F items can be edited
-          onDeleteItem={handleDeleteItem} // If L&F items can be deleted by owner
+          onOpenEditModal={openEditModal} // If L&F items can be edited by owner.
+          onDeleteItem={handleDeleteItem} // If L&F items can be deleted by owner.
           isOperationInProgress={operationInProgress}
           user={user}
           showMessage={showMessage}
-          isLostAndFound={true} // To differentiate ItemCard styling/actions
+          isLostAndFound={true} // Differentiates ItemCard styling/actions.
           onContactItem={(item) => {
-            /* Define contact logic if needed */
+            // Define contact logic (e.g., open WhatsApp or show message).
+            // This is often handled directly within ItemCard or ItemDetailModal,
+            // but a fallback or additional logic can be placed here.
+            showMessage(`Contacting poster of "${item.name}"...`, "info");
           }}
-          // visibleItemsCount and handleLoadMore if you implement pagination/infinite scroll
+          // Props for pagination/infinite scroll could be added here if implemented.
         />
       )}
-      {/* You might want a "Load More" button here if not using infinite scroll in ItemsList */}
+      {/* Placeholder for a "Load More" button if not using infinite scroll. */}
     </div>
   );
 };

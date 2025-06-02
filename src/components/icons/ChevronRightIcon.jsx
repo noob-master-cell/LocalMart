@@ -1,18 +1,26 @@
+// This component renders a chevron icon pointing to the right, often used for "next" or "expand" actions.
 import React from "react";
 
+/**
+ * ChevronRightIcon component.
+ * @param {object} props - The component's props.
+ * @param {string} [props.className="w-6 h-6"] - Optional CSS classes for styling the SVG.
+ * @returns {JSX.Element} The SVG chevron-right icon.
+ */
 const ChevronRightIcon = ({ className = "w-6 h-6" }) => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
-    fill="none"
-    viewBox="0 0 24 24"
-    strokeWidth={1.5}
-    stroke="currentColor"
-    className={className}
+    fill="none" // The shape is not filled.
+    viewBox="0 0 24 24" // Defines the SVG canvas size.
+    strokeWidth={1.5} // The thickness of the stroke.
+    stroke="currentColor" // Inherits color from the current text color.
+    className={className} // Applies custom or default Tailwind CSS classes for sizing.
   >
+    {/* SVG path data for the right-pointing chevron. */}
     <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      d="M8.25 4.5l7.5 7.5-7.5 7.5"
+      strokeLinecap="round" // Makes the ends of the lines rounded.
+      strokeLinejoin="round" // Makes the corners where lines meet rounded.
+      d="M8.25 4.5l7.5 7.5-7.5 7.5" // Defines the chevron shape.
     />
   </svg>
 );

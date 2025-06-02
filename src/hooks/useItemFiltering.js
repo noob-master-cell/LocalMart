@@ -1,24 +1,48 @@
+// This custom React hook encapsulates the logic for filtering and sorting an array of items.
+// It takes a list of items, filter criteria, a global search term, and an item type (e.g., 'sell', 'lostfound')
+// and returns a memoized, processed list of items.
+
 import { useMemo } from "react";
 
+/**
+ * `useItemFiltering` hook.
+ * Filters and sorts an array of items based on provided criteria.
+ *
+ * @param {Array<object>} items - The array of item objects to process.
+ * @param {object} filters - An object containing filter criteria:
+ * `category` (string): Category to filter by. "All" or empty means no category filter.
+ * `sortBy` (string): Criterion for sorting (e.g., "newest", "price-low").
+ * `priceRange` (object, optional): { min, max } for price filtering (used if `itemType` is 'sell').
+ * `status` (string, optional): Status to filter by (e.g., "lost", "found", used if `itemType` is 'lostfound').
+ * @param {string} [globalSearchTerm=""] - A global search term to filter items by name, description, etc.
+ * @param {string} [itemType="sell"] - The type of items being filtered ('sell' or 'lostfound').
+ * This affects which filters (like priceRange or status) are applied.
+ * @returns {Array<object>} A memoized array of the filtered and sorted items.
+ */
 export const useItemFiltering = (
   items,
   filters,
   globalSearchTerm = "",
-  itemType = "sell"
+  itemType = "sell" // Default to 'sell' type if not specified.
 ) => {
+  // `useMemo` is used to recompute the filtered/sorted list only when its dependencies change.
   return useMemo(() => {
+    // Return an empty array if `items` is null or undefined.
     if (!items) return [];
 
+    // Start with a shallow copy of the items array to avoid mutating the original.
     let filteredItems = [...items];
 
-    // Global search filter
+    // 1. Global Search Filter (case-insensitive)
     if (globalSearchTerm) {
       const term = globalSearchTerm.toLowerCase();
       filteredItems = filteredItems.filter((item) => {
+        // Check for matches in item name, description, and category.
         const nameMatch = item.name?.toLowerCase().includes(term);
         const descriptionMatch = item.description?.toLowerCase().includes(term);
         const categoryMatch = item.category?.toLowerCase().includes(term);
         let locationMatch = false;
+        // For 'lostfound' items, also search in `lastSeenLocation`.
         if (itemType === "lostfound") {
           locationMatch = item.lastSeenLocation?.toLowerCase().includes(term);
         }
@@ -26,14 +50,15 @@ export const useItemFiltering = (
       });
     }
 
-    // Category filter
+    // 2. Category Filter
+    // Apply if a category is selected and it's not the "All" placeholder.
     if (filters.category && filters.category !== "All") {
       filteredItems = filteredItems.filter(
         (item) => item.category === filters.category
       );
     }
 
-    // Price range filter (for sell items)
+    // 3. Price Range Filter (only for 'sell' items)
     if (itemType === "sell" && filters.priceRange) {
       if (filters.priceRange.min) {
         filteredItems = filteredItems.filter(
@@ -47,16 +72,18 @@ export const useItemFiltering = (
       }
     }
 
-    // Status filter (for lost & found items - already pre-filtered by Firebase query, but good for client-side consistency if needed)
-    // Note: The main status filtering for Lost & Found is now primarily done at the Firebase query level in LostAndFoundSection.jsx
-    // This client-side filter can act as a secondary check or if items from different statuses were ever mixed client-side.
+    // 4. Status Filter (primarily for 'lostfound' items)
+    // Note: For Lost & Found, the primary status filtering (lost/found) is often done
+    // at the data fetching level (e.g., Firebase query). This client-side filter
+    // can act as a secondary check or if items with different statuses were ever mixed client-side.
     if (itemType === "lostfound" && filters.status) {
       filteredItems = filteredItems.filter(
         (item) => item.status === filters.status
       );
     }
 
-    // Sort items
+    // 5. Sorting
+    // The `sort` method mutates the array, so it's applied to `filteredItems`.
     switch (filters.sortBy) {
       case "newest":
         filteredItems.sort(
@@ -69,7 +96,7 @@ export const useItemFiltering = (
         );
         break;
       case "price-low":
-        if (itemType === "sell") {
+        if (itemType === "sell") { // Price sorting only for 'sell' items.
           filteredItems.sort((a, b) => (a.price || 0) - (b.price || 0));
         }
         break;
@@ -84,8 +111,9 @@ export const useItemFiltering = (
         );
         break;
       default:
+        // No sorting or default sorting already applied (e.g., by "newest" if it's the default).
         break;
     }
-    return filteredItems;
-  }, [items, filters, globalSearchTerm, itemType]);
+    return filteredItems; // Return the processed list.
+  }, [items, filters, globalSearchTerm, itemType]); // Dependencies for `useMemo`.
 };
