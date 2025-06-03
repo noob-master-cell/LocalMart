@@ -1,326 +1,64 @@
-// This service module provides a comprehensive interface for interacting with Firebase services,
-// including Firestore (for data storage) and Firebase Storage (for image uploads).
-// It incorporates features like caching, connection pooling for real-time listeners,
-// batch operations, and basic offline support for pending operations.
-
-import {
-  collection,
-  query,
-  where,
-  getDocs,
-  onSnapshot, // For real-time listeners.
-  orderBy,
-  limit,
-  startAfter, // For pagination.
-  doc,
-  setDoc,     // For creating or overwriting a document with a specific ID.
-  addDoc,     // For adding a new document with an auto-generated ID.
-  deleteDoc,
-  Timestamp,  // Firestore Timestamp.
-} from "firebase/firestore";
-import {
-  ref,        // Storage reference.
-  uploadBytes,// Function to upload files.
-  getDownloadURL, // Function to get the public URL of an uploaded file.
-  deleteObject, // Function to delete a file from storage.
-} from "firebase/storage";
-// Import Firebase instances (db, storage, appId) from the main Firebase configuration file.
-import { db, storage, appId } from "../firebase";
+// src/services/firebaseService.js
+import ImageService from "./imageService"; // Assuming it's in the same directory
+import FirestoreService from "./firestoreService"; // Assuming it's in the same directory
+import { Timestamp } from "../firebase"; // Import Timestamp if needed for any direct pass-through
 
 class FirebaseService {
   constructor() {
-    // --- Caching ---
-    // `queryCache`: Stores results of Firestore queries to reduce redundant reads.
-    // `docCache`: Stores individual Firestore documents.
-    this.queryCache = new Map();
-    this.docCache = new Map();
-    this.maxCacheSize = 1000; // Maximum number of items in caches.
-    this.defaultTTL = 5 * 60 * 1000; // Default Time-To-Live for cache entries (5 minutes).
+    this.imageService = ImageService; // Use the imported singleton instance
+    this.firestoreService = FirestoreService; // Use the imported singleton instance
 
-    // --- Connection Pooling ---
-    // `connectionPool`: Manages active real-time listeners (onSnapshot) to prevent duplicates
-    // and facilitate cleanup. Stores unsubscribe functions.
-    this.connectionPool = new Map();
-
-    // --- Batch Operations (Placeholder) ---
-    // `batchOperations`: Array to hold operations for Firestore batch writes (not fully implemented here).
-    // `batchTimeout`: Timeout ID for scheduling batch execution.
-    this.batchOperations = [];
-    this.batchTimeout = null;
-
-    // --- Collection Paths ---
-    // Defines standardized paths for Firestore collections, incorporating `appId` for namespacing.
-    this.collections = {
-      sellItems: `artifacts/${appId}/public/data/sell_items`,
-      lostFoundItems: `artifacts/${appId}/public/data/lostfound_items`,
-      users: `artifacts/${appId}/users`,
-      // Note: item_questions are typically handled by a dedicated qaService.
-    };
+    // Re-expose collection paths if they were directly accessed from the old service
+    this.collections = this.firestoreService.collections;
   }
 
   // --- Cache Management Methods ---
+  // These are now part of FirestoreService, but if your old API exposed them,
+  // you can choose to proxy them or have consumers use FirestoreService directly for these.
+  // For simplicity, we'll assume direct usage or that they were internal.
+  // If needed, you could add:
+  // _getCacheKey(collectionPath, filters = {}) { return this.firestoreService._getCacheKey(collectionPath, filters); }
+  // invalidateCollectionCache(collectionPath) { this.firestoreService.invalidateCollectionCache(collectionPath); }
 
-  /**
-   * Generates a unique cache key for a query based on its path and filters.
-   * @param {string} collectionPath - The path of the Firestore collection.
-   * @param {Object} [filters={}] - Filters applied to the query.
-   * @returns {string} A unique cache key.
-   */
-  _getCacheKey(collectionPath, filters = {}) {
-    return `${collectionPath}_${JSON.stringify(filters)}`;
+  // --- Connection Pooling Methods ---
+  // Similar to cache, likely internal to FirestoreService now.
+
+  // --- Image Operations (Delegated to ImageService) ---
+  async uploadImage(file, itemContextPath, options = {}) {
+    return this.imageService.uploadImage(file, itemContextPath, options);
   }
 
-  /**
-   * Sets data in the query cache with a specific Time-To-Live (TTL).
-   * Manages cache size by removing the oldest item if maxCacheSize is reached.
-   * @param {string} key - The cache key.
-   * @param {any} data - The data to cache.
-   * @param {number} [ttl=this.defaultTTL] - Cache entry TTL in milliseconds.
-   */
-  _setCache(key, data, ttl = this.defaultTTL) {
-    if (this.queryCache.size >= this.maxCacheSize) {
-      const firstKey = this.queryCache.keys().next().value;
-      this.queryCache.delete(firstKey); // Evict oldest entry if cache is full.
-    }
-    this.queryCache.set(key, { data, timestamp: Date.now(), ttl });
-    // Automatically remove the cache entry after its TTL expires.
-    setTimeout(() => {
-      this.queryCache.delete(key);
-    }, ttl);
+  async uploadMultipleImages(files, itemContextPath, onProgress) {
+    return this.imageService.uploadMultipleImages(
+      files,
+      itemContextPath,
+      onProgress
+    );
   }
 
-  /**
-   * Retrieves data from the query cache if it exists and has not expired.
-   * @param {string} key - The cache key.
-   * @returns {any|null} The cached data, or null if not found or expired.
-   */
-  _getCache(key) {
-    const cached = this.queryCache.get(key);
-    if (!cached) return null;
-    // Check if cache entry has expired.
-    if (Date.now() - cached.timestamp > cached.ttl) {
-      this.queryCache.delete(key); // Delete expired entry.
-      return null;
-    }
-    return cached.data;
-  }
-
-  /**
-   * Invalidates (removes) all cache entries related to a specific collection path.
-   * Useful after write operations (add, update, delete) to ensure cache consistency.
-   * @param {string} collectionPath - The path of the Firestore collection whose cache needs invalidation.
-   */
-  invalidateCollectionCache(collectionPath) {
-    this.queryCache.forEach((value, key) => {
-      if (key.startsWith(collectionPath)) {
-        this.queryCache.delete(key);
-      }
-    });
-  }
-
-  // --- Connection Pooling Methods (for real-time listeners) ---
-
-  _getConnection(key) {
-    return this.connectionPool.get(key);
-  }
-
-  _setConnection(key, unsubscribe) {
-    const existing = this.connectionPool.get(key);
-    if (existing) existing(); // Unsubscribe existing listener if present for this key.
-    this.connectionPool.set(key, unsubscribe);
-  }
-
-  _removeConnection(key) {
-    const unsubscribe = this.connectionPool.get(key);
-    if (unsubscribe) {
-      unsubscribe();
-      this.connectionPool.delete(key);
-    }
-  }
-
-  // --- Image Operations ---
-
-  /**
-   * Uploads an image file to Firebase Storage with retry logic.
-   * @param {File} file - The image file to upload.
-   * @param {string} path - The sub-path within Firebase Storage (e.g., "sell", "lostfound").
-   * @param {Object} [options={}] - Upload options like maxRetries, retryDelay.
-   * @returns {Promise<Object>} A promise resolving to an object with upload status, URL, and storage path.
-   */
-  async uploadImage(file, path, options = {}) {
-    const { maxRetries = 3, retryDelay = 1000 } = options;
-    for (let attempt = 0; attempt < maxRetries; attempt++) {
-      try {
-        // Basic client-side validation.
-        if (!file.type.startsWith("image/"))
-          throw new Error("File must be an image");
-        if (file.size > 5 * 1024 * 1024) // 5MB limit
-          throw new Error("Image must be smaller than 5MB");
-
-        const imageName = `${Date.now()}_${file.name.replace(/\s+/g, "_")}`;
-        // Construct a unique storage path using appId and the provided path.
-        const storagePath = `images/${appId}/${path}/${imageName}`;
-        const storageRef = ref(storage, storagePath);
-
-        const snapshot = await uploadBytes(storageRef, file);
-        const downloadURL = await getDownloadURL(snapshot.ref);
-        return { success: true, url: downloadURL, path: storagePath };
-      } catch (error) {
-        console.error(
-          `Upload attempt ${attempt + 1} for ${file.name} failed:`,
-          error
-        );
-        if (attempt === maxRetries - 1)
-          return { success: false, error: error.message, file: file.name };
-        // Exponential backoff for retries.
-        await new Promise((resolve) =>
-          setTimeout(resolve, retryDelay * (attempt + 1))
-        );
-      }
-    }
-    // This line should ideally not be reached if the loop logic is correct.
-    return {
-      success: false,
-      error: "Upload failed after multiple retries",
-      file: file.name,
-    };
-  }
-
-  /**
-   * Uploads multiple image files in batches to Firebase Storage.
-   * @param {File[]} files - Array of image files.
-   * @param {string} path - The sub-path in Firebase Storage.
-   * @param {Function} [onProgress] - Callback function for progress updates (receives a value from 0 to 1).
-   * @returns {Promise<Object>} An object containing arrays of `successful` and `failed` uploads.
-   */
-  async uploadMultipleImages(files, path, onProgress) {
-    const results = { successful: [], failed: [] };
-    const totalFiles = files.length;
-    let completed = 0;
-    const batchSize = 3; // Number of images to upload concurrently in a batch.
-    const batches = [];
-
-    // Divide files into batches.
-    for (let i = 0; i < files.length; i += batchSize) {
-      batches.push(files.slice(i, i + batchSize));
-    }
-
-    // Process each batch.
-    for (const batch of batches) {
-      const promises = batch.map(async (file) => {
-        const result = await this.uploadImage(file, path); // Uses the single optimized uploadImage.
-        if (result.success) {
-          results.successful.push({
-            file: file.name,
-            url: result.url,
-            path: result.path,
-          });
-        } else {
-          results.failed.push({ file: file.name, error: result.error });
-        }
-        completed++;
-        onProgress?.(completed / totalFiles); // Call progress callback.
-      });
-      await Promise.all(promises); // Wait for the current batch to complete.
-    }
-    return results;
-  }
-
-  /**
-   * Deletes an image from Firebase Storage.
-   * @param {string} imagePath - The full path to the image in Firebase Storage.
-   * @returns {Promise<Object>} An object indicating success or failure.
-   */
   async deleteImage(imagePath) {
-    try {
-      const imageRef = ref(storage, imagePath);
-      await deleteObject(imageRef);
-      return { success: true };
-    } catch (error) {
-      console.error("Error deleting image:", error);
-      // Handle cases where the image might already be deleted or path is wrong.
-      if (error.code === "storage/object-not-found") {
-        console.warn(
-          `Image not found at path for deletion: ${imagePath}`
-        );
-        return {
-          success: true,
-          message: "Image not found, considered deleted.",
-        };
-      }
-      return { success: false, error: error.message };
-    }
+    return this.imageService.deleteImage(imagePath);
   }
 
-  // --- Firestore CRUD Operations ---
-
-  /**
-   * Adds a new item (document) to a Firestore collection.
-   * Invalidates the cache for that collection upon success.
-   * Stores operation for offline retry on failure.
-   * @param {string} collectionPath - Path to the Firestore collection.
-   * @param {Object} data - Data for the new item.
-   * @returns {Promise<Object>} Object with success status and new document ID or error message.
-   */
+  // --- Firestore CRUD Operations (Delegated to FirestoreService) ---
   async addItem(collectionPath, data) {
-    try {
-      const docRef = await addDoc(collection(db, collectionPath), {
-        ...data,
-        // Allow pre-set createdAt, otherwise use server timestamp.
-        createdAt: data.createdAt || Timestamp.now(),
-        updatedAt: Timestamp.now(),
-      });
-      this.invalidateCollectionCache(collectionPath); // Clear relevant cache.
-      return { success: true, id: docRef.id };
-    } catch (error) {
-      console.error("Error adding item:", error);
-      // Store for offline retry if enabled and appropriate.
-      this.storePendingOperation({
-        type: "add",
-        collection: collectionPath,
-        data,
-        timestamp: Date.now(),
-      });
-      return { success: false, error: error.message };
-    }
+    // Ensure createdAt and updatedAt are handled correctly or passed as Firestore Timestamps
+    const dataWithTimestamps = {
+      ...data,
+      createdAt:
+        data.createdAt instanceof Timestamp ? data.createdAt : Timestamp.now(),
+      updatedAt: Timestamp.now(),
+    };
+    return this.firestoreService.addItem(collectionPath, dataWithTimestamps);
   }
 
-  /**
-   * Updates an existing item (document) in a Firestore collection.
-   * Updates document cache and invalidates collection cache on success.
-   * @param {string} collectionPath - Path to the Firestore collection.
-   * @param {string} docId - ID of the document to update.
-   * @param {Object} updates - Fields to update.
-   * @returns {Promise<Object>} Object with success status or error message.
-   */
   async updateItem(collectionPath, docId, updates) {
-    const docRef = doc(db, collectionPath, docId);
-    try {
-      await setDoc( // Using setDoc with merge:true for robust updates.
-        docRef,
-        { ...updates, updatedAt: Timestamp.now() },
-        { merge: true }
-      );
-      // Update specific document cache if it exists.
-      const cacheKey = `${collectionPath}_${docId}`;
-      if (this.docCache.has(cacheKey)) {
-        const cached = this.docCache.get(cacheKey);
-        this.docCache.set(cacheKey, {
-          ...cached,
-          ...updates,
-          updatedAt: Timestamp.now(),
-        });
-      }
-      this.invalidateCollectionCache(collectionPath);
-      return { success: true };
-    } catch (error) {
-      console.error("Error updating item:", error);
-      return { success: false, error: error.message };
-    }
+    return this.firestoreService.updateItem(collectionPath, docId, updates);
   }
 
   /**
-   * Deletes an item (document) from a Firestore collection and associated images from Storage.
+   * Deletes an item (document) from a Firestore collection AND its associated images from Storage.
+   * This method now orchestrates calls to both FirestoreService and ImageService.
    * @param {string} collectionPath - Path to the Firestore collection.
    * @param {string} docId - ID of the document to delete.
    * @param {string[]} [imagePaths=[]] - Array of storage paths for images to delete.
@@ -328,284 +66,163 @@ class FirebaseService {
    */
   async deleteItem(collectionPath, docId, imagePaths = []) {
     try {
-      await deleteDoc(doc(db, collectionPath, docId));
-      if (imagePaths && imagePaths.length > 0) {
-        const deletePromises = imagePaths.map((path) => this.deleteImage(path));
-        await Promise.all(deletePromises);
+      // First, delete the Firestore document
+      const firestoreDeleteResult = await this.firestoreService.deleteItem(
+        collectionPath,
+        docId
+      );
+      if (!firestoreDeleteResult.success) {
+        // If Firestore deletion fails, return the error and don't attempt image deletion.
+        return firestoreDeleteResult;
       }
-      this.docCache.delete(`${collectionPath}_${docId}`); // Remove from document cache.
-      this.invalidateCollectionCache(collectionPath); // Invalidate collection cache.
+
+      // If Firestore document deletion is successful, proceed to delete images.
+      if (imagePaths && imagePaths.length > 0) {
+        // console.log(`Attempting to delete ${imagePaths.length} images from storage.`);
+        const deleteImagePromises = imagePaths.map((path) =>
+          this.imageService.deleteImage(path)
+        );
+        const imageDeletionResults = await Promise.all(deleteImagePromises);
+
+        const failedDeletions = imageDeletionResults.filter(
+          (res) => !res.success
+        );
+        if (failedDeletions.length > 0) {
+          console.warn("Some images failed to delete:", failedDeletions);
+          // You might want to aggregate these errors or handle them
+          // For now, we'll consider the overall operation successful if Firestore doc was deleted,
+          // but log a warning. Or, you could change success to false.
+          return {
+            success: true, // Or false if any image deletion failure is critical
+            message:
+              "Item deleted from Firestore, but some images may not have been removed from storage.",
+            imageErrors: failedDeletions,
+          };
+        }
+      }
+      // If all went well (Firestore delete and image deletes)
       return { success: true };
     } catch (error) {
-      console.error("Error deleting item:", error);
+      console.error("Error in orchestrated deleteItem:", error);
       return { success: false, error: error.message };
     }
   }
 
-  // --- Real-time Subscriptions ---
-
-  /**
-   * Subscribes to real-time updates for a Firestore collection.
-   * Manages listeners via connection pooling and uses caching.
-   * @param {string} collectionPath - Path to the Firestore collection.
-   * @param {Object} [options={}] - Subscription options (filters, sortBy, limit, callbacks, useCache).
-   * @returns {Function} Unsubscribe function for the listener.
-   */
+  // --- Real-time Subscriptions (Delegated to FirestoreService) ---
   subscribeToCollection(collectionPath, options = {}) {
-    const {
-      filters = {}, // e.g., { field, operator, value } or array of these.
-      sortBy = { field: "createdAt", direction: "desc" },
-      limit: docLimit,
-      onUpdate,     // Callback for data updates.
-      onError,      // Callback for errors.
-      useCache = true,
-    } = options;
-
-    // Generate a unique key for this subscription.
-    const subscriptionKey = this._getCacheKey(collectionPath, {
-      filters,
-      sortBy,
-      limit: docLimit,
-    });
-
-    // Return existing listener if one is already active for this key.
-    const existingConnection = this._getConnection(subscriptionKey);
-    if (existingConnection) return existingConnection;
-
-    // Use cached data immediately if available and `useCache` is true.
-    if (useCache) {
-      const cached = this._getCache(subscriptionKey);
-      if (cached?.items) onUpdate?.(cached.items);
-    }
-
-    let q = query(collection(db, collectionPath));
-    const constraints = [];
-
-    // Apply filters.
-    if (Array.isArray(filters)) {
-      filters.forEach((filter) => {
-        if (filter.value !== undefined && filter.value !== null && filter.value !== "") {
-          constraints.push(where(filter.field, filter.operator || "==", filter.value));
-        }
-      });
-    } else if (filters.field && filters.value !== undefined) {
-      constraints.push(where(filters.field, filters.operator || "==", filters.value));
-    }
-
-    // Apply sorting.
-    if (sortBy && sortBy.field) {
-      constraints.push(orderBy(sortBy.field, sortBy.direction || "desc"));
-    }
-    // Apply limit.
-    if (docLimit) {
-      constraints.push(limit(docLimit));
-    }
-    if (constraints.length > 0) {
-      q = query(q, ...constraints); // Apply all constraints to the query.
-    }
-
-    // Establish the real-time listener.
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const items = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-        if (useCache) this._setCache(subscriptionKey, { items }, 10 * 60 * 1000); // Cache for 10 min.
-        onUpdate?.(items); // Call update callback.
-      },
-      (error) => {
-        console.error("Subscription error:", error);
-        onError?.(error);
-        // Basic retry mechanism for listener errors.
-        setTimeout(() => {
-          this._removeConnection(subscriptionKey); // Clean up failed connection.
-          this.subscribeToCollection(collectionPath, options); // Attempt to resubscribe.
-        }, 5000); // Retry after 5 seconds.
-      }
-    );
-
-    this._setConnection(subscriptionKey, unsubscribe); // Store the unsubscribe function.
-    return unsubscribe;
+    return this.firestoreService.subscribeToCollection(collectionPath, options);
   }
 
-  // --- Paginated Fetch ---
-
-  /**
-   * Fetches items from a Firestore collection with pagination.
-   * @param {string} collectionPath - Path to the collection.
-   * @param {Object} [options={}] - Pagination options (filters, orderBy, pageSize, lastDoc).
-   * @returns {Promise<Object>} Object with success status, items, lastVisible doc, and hasMore flag.
-   */
+  // --- Paginated Fetch (Delegated to FirestoreService) ---
   async getItemsPaginated(collectionPath, options = {}) {
-    const {
-      filters = {},
-      orderByField = "createdAt",
-      orderByDirection = "desc",
-      pageSize = 20,
-      lastDoc = null, // Firestore DocumentSnapshot for `startAfter`.
-    } = options;
-
-    try {
-      let q = query(collection(db, collectionPath));
-      const constraints = [];
-
-      // Apply filters (similar to subscribeToCollection).
-      if (Array.isArray(filters)) {
-        filters.forEach(filter => { /* ... add where constraints ... */ });
-      } else if (filters.field && filters.value !== undefined) {
-        constraints.push(where(filters.field, filters.operator || '==', filters.value));
-      }
-
-      // Apply sorting.
-      constraints.push(orderBy(orderByField, orderByDirection));
-      // Apply pagination (startAfter).
-      if (lastDoc) {
-        constraints.push(startAfter(lastDoc));
-      }
-      // Apply page size limit.
-      constraints.push(limit(pageSize));
-
-      q = query(q, ...constraints);
-
-      const snapshot = await getDocs(q);
-      const items = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-      const newLastVisible = snapshot.docs[snapshot.docs.length - 1]; // Last document of the current page.
-      const hasMore = snapshot.docs.length === pageSize; // Indicates if more items might exist.
-
-      return { success: true, items, lastVisible: newLastVisible, hasMore };
-    } catch (error) {
-      console.error("Error fetching paginated items:", error);
-      return { success: false, error: error.message, items: [], hasMore: false };
-    }
+    return this.firestoreService.getItemsPaginated(collectionPath, options);
   }
 
+  // --- Offline Support (Assuming these remain in FirestoreService or are not directly exposed) ---
+  // storePendingOperation(operation) { /* ... if exposing ... */ }
+  // async retryPendingOperations() { /* ... if exposing ... */ }
 
-  // --- Offline Support ---
-
-  /**
-   * Stores a pending operation (e.g., an item addition that failed due to network issues)
-   * in localStorage for later retry.
-   * @param {Object} operation - The operation details to store.
-   */
-  storePendingOperation(operation) {
-    // Check if localStorage is available (client-side).
-    if (typeof window !== "undefined" && window.localStorage) {
-      try {
-        const pendingOps = JSON.parse(localStorage.getItem("pendingOperations") || "[]");
-        pendingOps.push(operation);
-        localStorage.setItem("pendingOperations", JSON.stringify(pendingOps));
-      } catch (error) {
-        console.error("Failed to store pending operation:", error);
-      }
-    }
-  }
-
-  /**
-   * Attempts to retry pending operations stored in localStorage.
-   * Typically called when the application comes back online.
-   */
-  async retryPendingOperations() {
-    if (typeof window === "undefined" || !window.localStorage) return;
-
-    const pendingOps = JSON.parse(localStorage.getItem("pendingOperations") || "[]");
-    if (pendingOps.length === 0) return;
-
-    const successfulOps = [];
-    for (const op of pendingOps) {
-      try {
-        let result;
-        if (op.type === "add") { // Currently only handles 'add' operations.
-          result = await this.addItem(op.collection, op.data);
-        }
-        // Extend here for other operation types like 'update' or 'delete'.
-        if (result && result.success) {
-          successfulOps.push(op);
-        }
-      } catch (error) {
-        console.error("Failed to retry operation:", error);
-      }
-    }
-
-    // Remove successfully retried operations from localStorage.
-    const remainingOps = pendingOps.filter(
-      (op) => !successfulOps.find((sOp) => sOp.timestamp === op.timestamp && sOp.type === op.type)
-    );
-    localStorage.setItem("pendingOperations", JSON.stringify(remainingOps));
-
-    if (successfulOps.length > 0) {
-      console.log(`Successfully retried ${successfulOps.length} pending operations.`);
-    }
-  }
-
-  // --- Cleanup & Health ---
-
-  /**
-   * Cleans up resources: unsubscribes all active listeners, clears caches, and timeouts.
-   * Should be called when the service instance is no longer needed or on app shutdown.
-   */
+  // --- Cleanup & Health (Delegated or specific to this facade) ---
   cleanup() {
-    this.connectionPool.forEach((unsubscribe) => unsubscribe());
-    this.connectionPool.clear();
-    this.queryCache.clear();
-    this.docCache.clear();
-    if (this.batchTimeout) clearTimeout(this.batchTimeout);
-    this.batchOperations = [];
-
+    // Cleanup individual services if they have their own cleanup methods
+    if (this.firestoreService.cleanup) {
+      this.firestoreService.cleanup();
+    }
+    // ImageService currently doesn't have a cleanup, but if it did:
+    // if (this.imageService.cleanup) { this.imageService.cleanup(); }
+    console.log("FirebaseService facade cleaned up.");
   }
 
-  /**
-   * Gets a status report of the service (cache sizes, active connections, etc.).
-   * Useful for debugging and monitoring.
-   * @returns {Object} Health status object.
-   */
   getHealthStatus() {
+    // You could combine health statuses from underlying services
     return {
-      cacheSize: this.queryCache.size,
-      activeConnections: this.connectionPool.size,
-      pendingBatchOps: this.batchOperations.length,
+      firestoreStatus: this.firestoreService.getHealthStatus
+        ? this.firestoreService.getHealthStatus()
+        : "N/A",
+      // imageServiceStatus: this.imageService.getHealthStatus ? this.imageService.getHealthStatus() : "N/A",
       timestamp: new Date().toISOString(),
     };
   }
 
-  // --- Specific Collection Helper Methods ---
-  // These methods provide a more convenient API for common operations on specific collections.
-
-  getCollectionRef(collectionName) {
-    return collection(db, collectionName);
+  // --- Specific Collection Helper Methods (Delegated to FirestoreService) ---
+  getCollectionRef(collectionNameKey) {
+    return this.firestoreService.getCollectionRef(collectionNameKey);
   }
 
-  // --- Sell Items Helpers ---
+  // Sell Items
   subscribeToSellItems(onUpdateCallback, filterOptions = {}) {
-    const options = {
-      onUpdate: onUpdateCallback,
-      filters: filterOptions.userId ? [{ field: "userId", operator: "==", value: filterOptions.userId }] : [],
-      limit: filterOptions.limit,
-    };
-    return this.subscribeToCollection(this.collections.sellItems, options);
+    return this.firestoreService.subscribeToSellItems(
+      onUpdateCallback,
+      filterOptions
+    );
   }
-  createSellItem(itemData) { return this.addItem(this.collections.sellItems, itemData); }
-  updateSellItem(itemId, itemData) { return this.updateItem(this.collections.sellItems, itemId, itemData); }
-  deleteSellItem(itemId, imagePaths = []) { return this.deleteItem(this.collections.sellItems, itemId, imagePaths); }
-  getSellItemsPaginated(options = {}) { return this.getItemsPaginated(this.collections.sellItems, options); }
+  createSellItem(itemData) {
+    return this.addItem(this.firestoreService.collections.sellItems, itemData);
+  }
+  updateSellItem(itemId, itemData) {
+    return this.updateItem(
+      this.firestoreService.collections.sellItems,
+      itemId,
+      itemData
+    );
+  }
+  // deleteSellItem now needs to be called with imagePaths
+  async deleteSellItem(itemId, imagePaths = []) {
+    return this.deleteItem(
+      this.firestoreService.collections.sellItems,
+      itemId,
+      imagePaths
+    );
+  }
+  getSellItemsPaginated(options = {}) {
+    return this.firestoreService.getSellItemsPaginated(
+      this.firestoreService.collections.sellItems,
+      options
+    );
+  }
 
-  // --- Lost & Found Items Helpers ---
+  // Lost & Found Items
   subscribeToLostFoundItems(onUpdateCallback, filterOptions = {}) {
-    const filters = [];
-    if (filterOptions.status) filters.push({ field: "status", operator: "==", value: filterOptions.status });
-    if (filterOptions.userId) filters.push({ field: "userId", operator: "==", value: filterOptions.userId });
-
-    const options = { onUpdate: onUpdateCallback, filters: filters, limit: filterOptions.limit };
-    return this.subscribeToCollection(this.collections.lostFoundItems, options);
+    return this.firestoreService.subscribeToLostFoundItems(
+      onUpdateCallback,
+      filterOptions
+    );
   }
-  createLostFoundItem(itemData) { return this.addItem(this.collections.lostFoundItems, itemData); }
-  updateLostFoundItem(itemId, itemData) { return this.updateItem(this.collections.lostFoundItems, itemId, itemData); }
-  deleteLostFoundItem(itemId, imagePaths = []) { return this.deleteItem(this.collections.lostFoundItems, itemId, imagePaths); }
-  getLostFoundItemsPaginated(options = {}) { return this.getItemsPaginated(this.collections.lostFoundItems, options); }
+  createLostFoundItem(itemData) {
+    return this.addItem(
+      this.firestoreService.collections.lostFoundItems,
+      itemData
+    );
+  }
+  updateLostFoundItem(itemId, itemData) {
+    return this.updateItem(
+      this.firestoreService.collections.lostFoundItems,
+      itemId,
+      itemData
+    );
+  }
+  // deleteLostFoundItem now needs to be called with imagePaths
+  async deleteLostFoundItem(itemId, imagePaths = []) {
+    return this.deleteItem(
+      this.firestoreService.collections.lostFoundItems,
+      itemId,
+      imagePaths
+    );
+  }
+  getLostFoundItemsPaginated(options = {}) {
+    return this.firestoreService.getLostFoundItemsPaginated(
+      this.firestoreService.collections.lostFoundItems,
+      options
+    );
+  }
 
-  // Example: User-specific item subscription
-  subscribeToUserItems(userId, onUpdateCallback) {
-    return this.subscribeToSellItems(onUpdateCallback, { userId });
+  // User-specific items
+  subscribeToUserSellItems(userId, onUpdateCallback) {
+    return this.firestoreService.subscribeToUserSellItems(
+      userId,
+      onUpdateCallback
+    );
   }
 }
 
-// Export a singleton instance of the FirebaseService.
 export default new FirebaseService();
