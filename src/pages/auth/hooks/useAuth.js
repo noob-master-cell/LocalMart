@@ -1,46 +1,39 @@
-// This custom React hook encapsulates the logic for the authentication page (AuthComponent).
-// It manages user input (email, password), handles form submission for signup/login,
-// processes Google Sign-In, manages error states, and handles navigation upon successful authentication.
-
+// src/pages/auth/hooks/useAuth.js
 import { useState, useEffect } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import {
-  useNavigate,
-  useLocation,
-  // For react-router-dom v5, it would be useHistory, useLocation. v6 is assumed here.
-} from "react-router-dom";
-// Firebase imports for authentication and Firestore database interactions.
-import {
-  auth,             // Firebase Auth instance.
-  db,               // Firestore instance.
-  appId,            // Application ID for namespacing (e.g., in Firestore paths).
-  GoogleAuthProvider, // Provider for Google Sign-In.
-  Timestamp,        // Firestore Timestamp for date/time fields.
-} from "../../../firebase.jsx"; // Adjust path to your Firebase config file.
+  auth,
+  db,
+  appId,
+  GoogleAuthProvider,
+  Timestamp,
+} from "../../../firebase.jsx";
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
-  signInWithPopup, // For Google Sign-In.
+  signInWithPopup,
+  updateProfile,
 } from "firebase/auth";
-import { doc, getDoc, setDoc } from "firebase/firestore"; // For user profile management in Firestore.
+import { doc, getDoc, setDoc } from "firebase/firestore";
 
 /**
  * Custom hook for managing authentication page logic.
  *
  * @param {boolean} isSignupMode - Flag indicating if the current mode is signup (true) or login (false).
- * This is typically determined by the route.
  * @returns {object} An object containing state and functions for the authentication page.
  */
 const useAuthPageLogic = (isSignupMode) => {
   // State for user inputs.
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [displayName, setDisplayName] = useState(""); // New state for display name
   // State for authentication errors.
   const [error, setError] = useState("");
   // State to indicate if an authentication operation is in progress.
   const [isLoading, setIsLoading] = useState(false);
 
-  const navigate = useNavigate(); // Hook for programmatic navigation.
-  const location = useLocation(); // Hook to get current location (e.g., for redirect after login).
+  const navigate = useNavigate();
+  const location = useLocation();
 
   /**
    * Handles successful authentication.
@@ -48,13 +41,8 @@ const useAuthPageLogic = (isSignupMode) => {
    * @param {object} userCredential - The user credential object from Firebase Auth.
    */
   const handleAuthSuccess = (userCredential) => {
-    // User profile creation/checking in Firestore is handled within
-    // `handleEmailPasswordSubmit` (for email signup) and `handleGoogleSignIn`.
-    // Determine the redirect path: from location state or default to home ('/').
     const from = location.state?.from?.pathname || "/";
-    navigate(from, { replace: true }); // `replace: true` prevents going back to auth page.
-    // Global context/store updates (e.g., Zustand store) would typically be triggered
-    // by the main `useAuth` hook listening to `onAuthStateChanged`.
+    navigate(from, { replace: true });
   };
 
   /**
@@ -62,39 +50,76 @@ const useAuthPageLogic = (isSignupMode) => {
    * @param {Event} [e] - The form submission event (optional).
    */
   const handleEmailPasswordSubmit = async (e) => {
-    if (e) e.preventDefault(); // Prevent default form submission.
-    setError(""); // Clear previous errors.
+    if (e) e.preventDefault();
+    setError("");
     setIsLoading(true);
+
     try {
       let userCredential;
-      if (isSignupMode) { // --- Signup ---
-        userCredential = await createUserWithEmailAndPassword(auth, email, password);
-        // Create a user profile document in Firestore for new email signups.
+
+      if (isSignupMode) {
+        // --- Signup ---
+        // Validate display name for signup
+        if (!displayName.trim()) {
+          setError("Full name is required for signup.");
+          setIsLoading(false);
+          return;
+        }
+
+        userCredential = await createUserWithEmailAndPassword(
+          auth,
+          email,
+          password
+        );
         const user = userCredential.user;
-        const userDocRef = doc(db, `artifacts/${appId}/users`, user.uid); // Path to user's document.
+
+        // Update the user's profile with the display name
+        await updateProfile(user, {
+          displayName: displayName.trim(),
+        });
+
+        // Create a user profile document in Firestore
+        const userDocRef = doc(db, `artifacts/${appId}/users`, user.uid);
         const userDocSnap = await getDoc(userDocRef);
-        if (!userDocSnap.exists()) { // Create profile if it doesn't exist.
+
+        if (!userDocSnap.exists()) {
           await setDoc(userDocRef, {
             email: user.email,
-            displayName: user.email, // Default displayName to email.
-            createdAt: Timestamp.now(), // Record creation time.
-            provider: "email/password", // Authentication provider.
-            photoURL: null, // No photo URL for email signup by default.
+            displayName: displayName.trim(),
+            createdAt: Timestamp.now(),
+            provider: "email/password",
+            photoURL: null,
           });
         }
-      } else { // --- Login ---
-        userCredential = await signInWithEmailAndPassword(auth, email, password);
+      } else {
+        // --- Login ---
+        userCredential = await signInWithEmailAndPassword(
+          auth,
+          email,
+          password
+        );
       }
-      handleAuthSuccess(userCredential); // Handle successful auth.
+
+      handleAuthSuccess(userCredential);
     } catch (err) {
       // Provide user-friendly error messages.
-      setError(
+      if (err.code === "auth/email-already-in-use") {
+        setError(
+          "An account with this email already exists. Please sign in instead."
+        );
+      } else if (err.code === "auth/weak-password") {
+        setError("Password should be at least 6 characters.");
+      } else if (err.code === "auth/invalid-email") {
+        setError("Please enter a valid email address.");
+      } else if (
         err.code === "auth/invalid-credential" ||
         err.code === "auth/wrong-password" ||
         err.code === "auth/user-not-found"
-          ? "Invalid email or password."
-          : err.message // Fallback to Firebase error message.
-      );
+      ) {
+        setError("Invalid email or password.");
+      } else {
+        setError(err.message);
+      }
       console.error("Email/Password Auth error in useAuthPageLogic:", err);
     }
     setIsLoading(false);
@@ -104,28 +129,46 @@ const useAuthPageLogic = (isSignupMode) => {
    * Handles Google Sign-In.
    */
   const handleGoogleSignIn = async () => {
-    setError(""); // Clear previous errors.
+    setError("");
     setIsLoading(true);
-    const provider = new GoogleAuthProvider(); // Google Auth provider.
+    const provider = new GoogleAuthProvider();
+
     try {
       const result = await signInWithPopup(auth, provider);
       const user = result.user;
+
       // Create/update user profile in Firestore for Google Sign-In users.
       const userDocRef = doc(db, `artifacts/${appId}/users`, user.uid);
       const userDocSnap = await getDoc(userDocRef);
-      if (!userDocSnap.exists()) { // Create profile if it doesn't exist.
+
+      if (!userDocSnap.exists()) {
         await setDoc(userDocRef, {
           email: user.email,
           displayName: user.displayName,
           createdAt: Timestamp.now(),
-          provider: "google.com", // Authentication provider.
+          provider: "google.com",
           photoURL: user.photoURL,
         });
+      } else {
+        // Update display name and photo if they've changed
+        const existingData = userDocSnap.data();
+        if (
+          existingData.displayName !== user.displayName ||
+          existingData.photoURL !== user.photoURL
+        ) {
+          await setDoc(
+            userDocRef,
+            {
+              displayName: user.displayName,
+              photoURL: user.photoURL,
+              lastLogin: Timestamp.now(),
+            },
+            { merge: true }
+          );
+        }
       }
-      // If it exists, you might want to update `displayName` or `photoURL` if they've changed.
-      // else { await updateDoc(userDocRef, { displayName: user.displayName, photoURL: user.photoURL, lastLogin: Timestamp.now() }); }
 
-      handleAuthSuccess(result); // Handle successful auth.
+      handleAuthSuccess(result);
     } catch (err) {
       setError(err.message);
       console.error("Google Sign-In error in useAuthPageLogic:", err);
@@ -137,29 +180,29 @@ const useAuthPageLogic = (isSignupMode) => {
    * Toggles the authentication mode between signup and login by navigating.
    */
   const toggleAuthMode = () => {
-    setError(""); // Clear errors when toggling mode.
+    setError("");
+    // Clear the display name when switching modes
+    setDisplayName("");
+
     if (isSignupMode) {
-      // If currently on signup page, navigate to login.
-      // Preserve location state for potential redirect after login.
       navigate("/auth/login", { state: location.state, replace: true });
     } else {
-      // If currently on login page, navigate to signup.
       navigate("/auth/signup", { state: location.state, replace: true });
     }
   };
 
-  // Return state and handler functions to be used by the AuthComponent.
   return {
     email,
     setEmail,
     password,
     setPassword,
+    displayName,
+    setDisplayName,
     error,
     isLoading,
     handleEmailPasswordSubmit,
     handleGoogleSignIn,
     toggleAuthMode,
-    // `isSignupMode` is passed as a prop to the hook, so the component determines it from the route.
   };
 };
 
