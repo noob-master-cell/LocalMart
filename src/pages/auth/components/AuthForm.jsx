@@ -98,11 +98,11 @@ const AuthForm = ({
         {/* Dynamically set button text based on loading state and mode. */}
         {isLoading
           ? isSignupMode
-            ? "Creating Account..." // Loading text for signup.
-            : "Logging In..."       // Loading text for login.
+            ? "Creating Account..."
+            : "Logging In..."
           : isSignupMode
-          ? "Sign Up with Email" // Default text for signup.
-          : "Login with Email"}  // Default text for login.
+          ? "Sign Up with Email"
+          : "Login with Email"}
       </button>
     </form>
   );

@@ -136,7 +136,7 @@ function AppWrapper() {
       if (process.env.NODE_ENV === "development") {
         // Only run in development
         const health = optimizedFirebaseService.getHealthStatus();
-        console.log("App Health Status:", health);
+
         if (health.cacheSize > 800) {
           // Example: Check cache size
           console.warn(

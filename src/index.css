@@ -48,3 +48,8 @@ body {
   box-shadow: 0 -2px 4px -1px rgba(0, 0, 0, 0.06), /* First shadow layer */
     0 -4px 5px -1px rgba(0, 0, 0, 0.06); /* Second shadow layer for more depth */
 }
+
+.search-panel-enter { opacity: 0; transform: translateY(-20px); }
+.search-panel-enter-active { opacity: 1; transform: translateY(0); transition: opacity 300ms, transform 300ms; }
+.search-panel-leave { opacity: 1; transform: translateY(0); }
+.search-panel-leave-active { opacity: 0; transform: translateY(-20px); transition: opacity 300ms, transform 300ms; }

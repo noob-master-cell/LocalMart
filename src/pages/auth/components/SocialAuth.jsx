@@ -4,7 +4,7 @@
 
 import React from "react";
 // Icon for the Google Sign-In button.
-import GoogleIcon from "./../../../components/icons/GoogleIcon";
+import { GoogleIcon } from "../../../components/Icons";
 
 /**
  * SocialAuth component.

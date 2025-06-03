@@ -255,38 +255,4 @@ const useAppStore = create(
   }))
 );
 
-// Performance monitoring in development environment.
-// Subscribes to item changes and logs information if conditions are met.
-if (process.env.NODE_ENV === "development") {
-  let renderCount = 0;
-  // Subscribe to changes in the `items` part of the state.
-  useAppStore.subscribe(
-    (state) => state.items, // Selector for the `items` state.
-    (items) => {
-      // Callback function when `items` state changes.
-      renderCount++;
-      const totalItems = Object.values(items).reduce(
-        (sum, collection) => sum + collection.data.length,
-        0
-      );
-
-      // Log every 10th update to avoid excessive logging.
-      if (renderCount % 10 === 0) {
-        console.log(
-          `[Store Update #${renderCount}] Total items: ${totalItems}`
-        );
-      }
-
-      // Warn if the total number of items exceeds a threshold.
-      if (totalItems > 1000) {
-        console.warn(
-          "Large state detected:",
-          totalItems,
-          "items. Consider pagination or virtualization strategies."
-        );
-      }
-    }
-  );
-}
-
 export default useAppStore;

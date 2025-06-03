@@ -4,7 +4,7 @@
 
 import React from "react";
 // Icon representing the application or home.
-import HomeIcon from "../../../components/icons/HomeIcon";
+import { HomeIcon } from "../../../components/Icons";
 
 /**
  * AuthBranding component.

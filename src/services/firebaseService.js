@@ -549,7 +549,7 @@ class FirebaseService {
     this.docCache.clear();
     if (this.batchTimeout) clearTimeout(this.batchTimeout);
     this.batchOperations = [];
-    console.log("FirebaseService cleaned up connections and caches.");
+
   }
 
   /**
