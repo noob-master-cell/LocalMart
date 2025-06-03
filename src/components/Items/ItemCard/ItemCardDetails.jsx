@@ -1,8 +1,7 @@
 import React from "react";
 import WhatsAppIcon from "../../Icons/WhatsAppIcon"; // Icon for WhatsApp button
 
-// Define a fixed height for the card content area to ensure consistent card sizes.
-const CARD_CONTENT_HEIGHT = "h-[220px]"; // Or adjust as needed after button changes
+// Removed fixed height constant: const CARD_CONTENT_HEIGHT = "h-[220px]";
 
 /**
  * @component ItemCardDetails
@@ -34,12 +33,16 @@ const ItemCardDetails = ({
 }) => {
   return (
     <div
-      // Flex container to manage layout; flex-grow allows this section to fill available vertical space.
-      // CARD_CONTENT_HEIGHT sets a fixed height; overflow-hidden clips content if it exceeds this.
-      className={`p-4 flex-grow flex flex-col ${CARD_CONTENT_HEIGHT} overflow-hidden`}
+      // Removed CARD_CONTENT_HEIGHT and outer overflow-hidden.
+      // flex-grow allows this section to fill available vertical space within ItemCard.
+      // flex-col ensures children are stacked vertically.
+      className={`p-4 flex-grow flex flex-col`}
     >
-      {/* Flex-grow container for main textual content, allowing it to expand and scroll if necessary. */}
-      <div className="flex-grow overflow-hidden">
+      {/* Flex-grow container for main textual content. */}
+      {/* overflow-hidden might still be useful here if individual text sections are very long
+          and you want to ensure the buttons below are always reachable,
+          but line-clamp should handle most cases. */}
+      <div className="flex-grow">
         {/* Item Name: Displayed as a prominent heading. Line-clamp limits to 2 lines with ellipsis. */}
         <h3
           className="text-lg font-semibold text-gray-800 mb-2 line-clamp-2"
@@ -156,7 +159,7 @@ const ItemCardDetails = ({
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
-                  d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                  d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542 7z"
                 />
               </svg>
               <span>View Details</span>

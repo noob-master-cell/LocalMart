@@ -61,23 +61,9 @@ const BuyingHeader = ({
                 </button>
               </div>
             )}
-
-            {showItemCounts && (
-              <span className="bg-gray-100 text-gray-700 px-2 py-0.5 rounded-md">
-                {processedItemsCount === 0 && isFiltered
-                  ? "0 matches"
-                  : `Showing ${processedItemsCount} of ${totalItemsCount}${
-                      isFiltered && processedItemsCount > 0 ? " (filtered)" : ""
-                    }`}
-              </span>
-            )}
           </div>
         )}
       </div>
-      {/* Subtitle can be optional or placed differently if space is critical */}
-      <p className="text-xs text-gray-500 mt-1 sm:mt-0 sm:text-right">
-        Discover great deals from your local community.
-      </p>
     </div>
   );
 };

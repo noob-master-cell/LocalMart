@@ -1,21 +1,22 @@
-import React from "react";
 import NavLinkRouter from "../NavLinkRouter";
-import ShoppingBagIcon from "../../Icons/ShoppingBagIcon";
-import TagIcon from "../../Icons/TagIcon";
-import SearchIcon from "../../Icons/SearchIcon";
-import UserCircleIcon from "../../Icons/UserCircleIcon";
-
+import {
+  ShoppingBagIcon,
+  TagIcon,
+  SearchIcon,
+  UserCircleIcon,
+} from "../../icons";
 /**
  * @component MobileNavMenu
  * @description Renders the actual navigation links for the mobile navigation bar.
  * It displays different options based on whether a user is logged in.
  *
  * @param {object} props - The properties passed to the component.
- * @param {object} [props.user] - The current user object. If present, shows user-specific options like logout.
- * @param {Function} [props.onLogout] - Callback function to handle user logout.
+ * @param {object} [props.user] - The current user object. If present, shows user-specific options like a profile link.
+ * @param {Function} [props.onLogout] - Callback function to handle user logout (no longer used here, moved to Header).
  * @returns {JSX.Element} A set of navigation links for mobile view.
  */
-const MobileNavMenu = ({ user, onLogout }) => {
+const MobileNavMenu = ({ user }) => {
+  // Removed onLogout from props as it's not used here anymore
   return (
     <div className="flex justify-around items-center h-16">
       {/* Navigation link for the 'Buy' section */}
@@ -30,15 +31,13 @@ const MobileNavMenu = ({ user, onLogout }) => {
       />
       {/* Conditional rendering for user authentication status */}
       {user ? (
-        // If user is logged in, display a Logout button
-        <button
-          onClick={onLogout}
-          className="flex flex-col items-center justify-center px-2 py-1 rounded-md text-sm font-medium text-gray-500 hover:text-red-600 hover:bg-red-50 w-full"
-          aria-label="Logout"
-        >
-          <UserCircleIcon />
-          <span className="mt-0.5 text-xs">Logout</span>
-        </button>
+        // If user is logged in, display a link to their profile page
+        // Ensure you have a /profile route or change this to a relevant page like /sell
+        <NavLinkRouter
+          to="/profile" // You might need to create this route or link to /sell or other user page
+          label="Profile"
+          icon={<UserCircleIcon />}
+        />
       ) : (
         // If user is not logged in, display a link to the Account/Login page
         <NavLinkRouter

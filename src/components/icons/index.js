@@ -14,3 +14,4 @@ export { default as HomeIcon } from "./HomeIcon"; // Icon for the home/main page
 export { default as GoogleIcon } from "./GoogleIcon"; // Google logo icon, often used for Google Sign-In.
 export { default as ChevronRightIcon } from "./ChevronRightIcon"; // Right-pointing chevron, for navigation.
 export { default as ChevronLeftIcon } from "./ChevronLeftIcon"; // Left-pointing chevron, for navigation.
+export { default as LogoutIcon } from "./LogoutIcon"; // Added LogoutIcon

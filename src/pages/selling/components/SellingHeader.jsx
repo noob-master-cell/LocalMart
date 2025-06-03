@@ -1,5 +1,5 @@
 import React from "react";
-import { PlusCircleIcon } from "../../../components/Icons";
+import { PlusCircleIcon } from "../../../components/icons";
 
 /**
  * @component SellingHeader
@@ -19,27 +19,31 @@ const SellingHeader = ({
   onOpenAddModal,
 }) => {
   return (
-    <div className="mb-4 sm:mb-6">
+    <div className="mb-3 sm:mb-4">
       {" "}
       {/* Reduced bottom margin */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        {" "}
+        {/* Reduced gap */}
         {/* Left side: Title and search term display */}
         <div className="text-center sm:text-left">
-          <h2 className="text-xl sm:text-2xl font-bold text-gray-800">
+          <h2 className="text-lg sm:text-xl font-bold text-gray-800">
+            {" "}
+            {/* Reduced font size */}
             Your Items for Sale
           </h2>
-          <p className="text-xs text-gray-500 mt-0.5 sm:mt-1">
+          <p className="text-xs text-gray-500 mt-0.5">
             {" "}
-            {/* Reduced top margin and font size */}
+            {/* Reduced top margin */}
             Manage your marketplace listings.
           </p>
 
           {globalSearchTerm && (
-            <div className="mt-2 inline-flex items-center space-x-1.5 bg-sky-50 border border-sky-200 rounded-md px-2 py-1 text-xs">
+            <div className="mt-1.5 inline-flex items-center space-x-1 bg-sky-50 border border-sky-200 rounded-md px-1.5 py-0.5 text-xs">
               {" "}
-              {/* Adjusted padding and spacing */}
+              {/* Adjusted padding, margin, spacing */}
               <svg // Search Icon
-                className="w-3.5 h-3.5 text-sky-600"
+                className="w-3 h-3 text-sky-600" /* Reduced size */
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -60,7 +64,7 @@ const SellingHeader = ({
                 title="Clear global search filter"
               >
                 <svg // Clear Search Icon (X)
-                  className="w-3.5 h-3.5"
+                  className="w-3 h-3" /* Reduced size */
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -76,14 +80,13 @@ const SellingHeader = ({
             </div>
           )}
         </div>
-
         {/* Right side: "List New Item" button */}
         {user && (
           <button
             onClick={onOpenAddModal}
-            className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 px-4 rounded-lg shadow-md flex items-center justify-center space-x-2 transition-all hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 text-sm"
+            className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-3.5 rounded-lg shadow-md flex items-center justify-center space-x-1.5 transition-all hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 text-sm" /* Reduced padding, spacing */
           >
-            <PlusCircleIcon className="w-5 h-5" /> {/* Icon size consistent */}
+            <PlusCircleIcon className="w-4 h-4" /> {/* Reduced icon size */}
             <span>List New Item</span>
           </button>
         )}

@@ -1,19 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import QuestionList from "./QuestionList";
-import qaService from "../../../services/qaService"; // Service for Q&A backend operations
+import qaService from "../../../services/qaService";
 
-/**
- * @component ItemQuestions
- * @description Manages the display and interaction for item-specific questions and answers.
- * It handles fetching questions, posting new questions, and submitting answers.
- *
- * @param {object} props - The properties passed to the component.
- * @param {object} props.item - The item object for which questions are being displayed. Must have `id` and `userId`.
- * @param {object} props.user - The currently authenticated user object (referred to as `currentUser` internally).
- * @param {Function} [props.showMessage] - Callback function to display messages (e.g., success, error).
- * @param {boolean} [props.isLostAndFound=false] - Flag indicating if the item is from the Lost & Found section.
- * @returns {JSX.Element} The questions and answers section for an item.
- */
 const ItemQuestions = ({
   item,
   user: currentUser, // Renaming for clarity within the component
@@ -37,9 +25,6 @@ const ItemQuestions = ({
 
   // Effect to fetch questions when the item or itemType changes
   useEffect(() => {
-    /**
-     * Fetches questions for the current item.
-     */
     const fetchQuestionsLocal = async () => {
       if (!item || !item.id) return; // Ensure item and item.id are available
       setIsLoading(true);
@@ -60,10 +45,6 @@ const ItemQuestions = ({
     fetchQuestionsLocal();
   }, [item, itemType, showMessage]);
 
-  /**
-   * Handles posting a new question.
-   * @type {Function}
-   */
   const handlePostQuestion = useCallback(async () => {
     if (!currentUser) {
       showMessage?.("Please log in to ask questions.", "info");
@@ -95,21 +76,10 @@ const ItemQuestions = ({
     }
   }, [currentUser, newQuestionText, item, itemType, showMessage]);
 
-  /**
-   * Updates the answer text for a specific question in the local state.
-   * @param {string} questionId - The ID of the question.
-   * @param {string} text - The new answer text.
-   * @type {Function}
-   */
   const handleAnswerTextChange = useCallback((questionId, text) => {
     setAnswerTextMap((prevMap) => ({ ...prevMap, [questionId]: text }));
   }, []);
 
-  /**
-   * Handles submitting an answer for a specific question.
-   * @param {string} questionId - The ID of the question to answer.
-   * @type {Function}
-   */
   const handleSubmitAnswer = useCallback(
     async (questionId) => {
       if (!currentUser) {
@@ -157,11 +127,6 @@ const ItemQuestions = ({
     [currentUser, answerTextMap, showMessage]
   );
 
-  /**
-   * Handles deleting a question.
-   * @param {string} questionId - The ID of the question to delete.
-   * @type {Function}
-   */
   const handleDeleteQuestion = useCallback(
     async (questionId) => {
       // Basic confirmation before deleting
@@ -172,8 +137,8 @@ const ItemQuestions = ({
         return;
       try {
         await qaService.deleteQuestion(questionId);
-        setQuestions((prevQuestions) =>
-          prevQuestions.filter((q) => q.id !== questionId) // Remove question from local state
+        setQuestions(
+          (prevQuestions) => prevQuestions.filter((q) => q.id !== questionId) // Remove question from local state
         );
         showMessage?.("Question deleted successfully.", "success");
       } catch (error) {
@@ -186,53 +151,28 @@ const ItemQuestions = ({
 
   // --- Edit Handlers ---
 
-  /**
-   * Initiates editing mode for a question.
-   * @param {string} questionId - The ID of the question to edit.
-   * @param {string} currentText - The current text of the question.
-   * @type {Function}
-   */
   const handleStartEditQuestion = useCallback((questionId, currentText) => {
     setEditingAnswerQuestionId(null); // Ensure not in answer edit mode
     setEditingQuestionId(questionId);
     setEditText(currentText);
   }, []);
 
-  /**
-   * Initiates editing mode for an answer.
-   * @param {string} questionId - The ID of the question whose answer is to be edited.
-   * @param {string} currentText - The current text of the answer.
-   * @type {Function}
-   */
   const handleStartEditAnswer = useCallback((questionId, currentText) => {
     setEditingQuestionId(null); // Ensure not in question edit mode
     setEditingAnswerQuestionId(questionId);
     setEditText(currentText);
   }, []);
 
-  /**
-   * Updates the text being edited.
-   * @param {React.ChangeEvent<HTMLTextAreaElement>} e - The change event from the textarea.
-   * @type {Function}
-   */
   const handleEditTextChange = useCallback((e) => {
     setEditText(e.target.value);
   }, []);
 
-  /**
-   * Cancels the current editing mode (for question or answer).
-   * @type {Function}
-   */
   const handleCancelEdit = useCallback(() => {
     setEditingQuestionId(null);
     setEditingAnswerQuestionId(null);
     setEditText("");
   }, []);
 
-  /**
-   * Saves the edited question.
-   * @type {Function}
-   */
   const handleSaveEditQuestion = useCallback(async () => {
     if (!editingQuestionId || !editText.trim()) return;
     // Consider adding a submitting state specifically for edits if operations are long
@@ -253,10 +193,6 @@ const ItemQuestions = ({
     }
   }, [editingQuestionId, editText, showMessage, handleCancelEdit]);
 
-  /**
-   * Saves the edited answer.
-   * @type {Function}
-   */
   const handleSaveEditAnswer = useCallback(async () => {
     if (!editingAnswerQuestionId || !editText.trim()) return;
     try {
@@ -279,59 +215,87 @@ const ItemQuestions = ({
   // Display loading skeleton if questions are being fetched
   if (isLoading) {
     return (
-      <div className="py-2 animate-pulse" aria-live="polite" aria-busy="true">
+      <div className="py-4 animate-pulse" aria-live="polite" aria-busy="true">
         {/* Skeleton for section title */}
-        <div className="h-4 bg-gray-200 rounded w-1/3 mb-2"></div>
+        <div className="h-6 bg-gray-200 rounded w-1/3 mb-4"></div>
         {/* Skeleton for question input area */}
-        <div className="h-20 bg-gray-100 rounded mb-4"></div>
-        {/* Skeleton for a question item */}
-        <div className="h-4 bg-gray-200 rounded w-1/4 mb-2"></div>
-        <div className="h-16 bg-gray-100 rounded"></div>
+        <div className="h-24 bg-gray-100 rounded-lg mb-6"></div>
+        {/* Skeleton for a couple of Q&A items */}
+        <div className="space-y-4">
+          <div className="h-20 bg-gray-100 rounded-lg p-3">
+            <div className="h-4 bg-gray-200 rounded w-1/4 mb-2"></div>
+            <div className="h-3 bg-gray-200 rounded w-full mb-1"></div>
+            <div className="h-3 bg-gray-200 rounded w-3/4"></div>
+          </div>
+          <div className="h-20 bg-gray-100 rounded-lg p-3">
+            <div className="h-4 bg-gray-200 rounded w-1/4 mb-2"></div>
+            <div className="h-3 bg-gray-200 rounded w-full mb-1"></div>
+            <div className="h-3 bg-gray-200 rounded w-3/4"></div>
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
-      <h4 className="text-lg font-semibold text-gray-700 mb-3">
-        Questions & Answers
+    <div className="space-y-6">
+      {" "}
+      {/* Increased overall spacing */}
+      <h4 className="text-xl font-semibold text-gray-800">
+        {" "}
+        {/* Slightly larger title */}
+        Do you have any questions?
       </h4>
-
       {/* Input area for posting a new question (visible if user is logged in) */}
       {currentUser ? (
-        <div className="mb-4">
+        <div className="bg-white p-4 rounded-lg shadow border border-gray-200">
+          {" "}
+          {/* Card-like container */}
+          <label
+            htmlFor="new-question"
+            className="block text-sm font-medium text-gray-700 mb-1.5"
+          >
+            Have a question?
+          </label>
           <textarea
-            className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 resize-y"
+            id="new-question"
+            className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-y text-sm transition-colors"
             rows="3"
-            placeholder="Ask a question about this item..."
+            placeholder="Type your question here..."
             value={newQuestionText}
             onChange={(e) => setNewQuestionText(e.target.value)}
             disabled={isSubmittingQuestion}
             aria-label="Ask a question"
           />
-          <button
-            onClick={handlePostQuestion}
-            disabled={isSubmittingQuestion || !newQuestionText.trim()}
-            className="mt-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isSubmittingQuestion ? "Posting..." : "Post Question"}
-          </button>
+          <div className="mt-2.5 text-right">
+            {" "}
+            {/* Align button to the right */}
+            <button
+              onClick={handlePostQuestion}
+              disabled={isSubmittingQuestion || !newQuestionText.trim()}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-5 rounded-md text-sm disabled:opacity-60 disabled:cursor-not-allowed transition-colors shadow-sm hover:shadow"
+            >
+              {isSubmittingQuestion ? "Posting..." : "Post Question"}
+            </button>
+          </div>
         </div>
       ) : (
         // Prompt to log in if user is not authenticated
-        <p className="text-sm text-gray-500 mb-4">
-          <button
-            onClick={() =>
-              showMessage?.("Please log in to ask questions.", "info")
-            }
-            className="text-indigo-600 hover:underline font-medium"
-          >
-            Log in
-          </button>{" "}
-          to ask a question.
-        </p>
+        <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 text-center">
+          <p className="text-sm text-gray-700">
+            Want to ask a question?{" "}
+            <button
+              onClick={
+                () => showMessage?.("Please log in to ask questions.", "info") // Or navigate to login
+              }
+              className="text-indigo-600 hover:underline font-semibold"
+            >
+              Log in
+            </button>{" "}
+            to join the conversation.
+          </p>
+        </div>
       )}
-
       {/* List of questions and answers */}
       <QuestionList
         questions={questions}
