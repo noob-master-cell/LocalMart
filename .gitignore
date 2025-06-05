@@ -1,2 +1,56 @@
+# Firebase
+.firebase
+firebase.json
+firestore.indexes.json
+firestore.rules
+storage.rules
+.firebaserc
+
+# Git
+.git
+
+# Build output
+dist
+build
+out
+
+# Dependencies
 node_modules
+
+# Public folder (if it contains build artifacts or user uploads not to be versioned)
+# If your 'public' folder contains static assets that *should* be versioned,
+# you might want to remove 'public/' from this list or be more specific,
+# e.g., public/uploads
+public/
+
+# Source files (if compiled to 'dist' or 'build' and you only want to commit the build)
+# If you want to commit your source files, remove 'src/'
+src/
+
+# Environment variables
+.env
 .env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.*
+
+# This file
+.gitignore
+
+# Other common files/folders
+cors.json # Assuming this is a config file you don't want to commit
+index.html # If this is a root generated file, otherwise remove if it's a source file
+package.json # Usually committed, but listed by user
+package-lock.json # Usually committed, but listed by user
+postcss.config.js # Usually committed, but listed by user
+tailwind.config.js # Usually committed, but listed by user
+vite.config.js # Usually committed, but listed by user
+
+# IDE & OS files
+.DS_Store
+Thumbs.db
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

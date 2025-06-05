@@ -1,8 +1,6 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 // Firebase services and utilities are imported for data handling
-import { Timestamp } from "../../../firebase.jsx"; // Assuming Timestamp is directly from firebase.jsx
-// firebaseService seems to be implicitly used by a hook, not directly for uploads here
-// import firebaseService from "../../../services/firebaseService.js";
+import { Timestamp } from "../../../firebase.jsx";
 import { CATEGORIES, LIMITS, ITEM_STATUS } from "../../../config/constants.js";
 import ItemFormFields from "./ItemFormFields.jsx";
 import ItemFormActions from "./ItemFormActions.jsx";
@@ -57,6 +55,9 @@ const ItemForm = ({
   const [error, setError] = useState(""); // Form-level error message
   const isEditMode = !!initialData.id; // True if initialData has an ID, indicating an edit operation
 
+  // Add this ref to track the blob URLs from the *previous* render
+  const previousBlobUrlsRef = useRef(new Set());
+
   // Effect to initialize form data when initialData or type changes (e.g., when opening an edit form)
   useEffect(() => {
     const defaultDate = new Date().toISOString().split("T")[0]; // Default date for "found" items
@@ -67,7 +68,7 @@ const ItemForm = ({
       category: initialData.category || "",
       whatsappNumber: initialData.whatsappNumber || "",
       lastSeenLocation: initialData.lastSeenLocation || "",
-      dateFound: initialData.dateFound?.seconds // Convert Firestore Timestamp to YYYY-MM-DD
+      dateFound: initialData.dateFound?.seconds // Convert Firestore Timestamp to ISO-MM-DD
         ? new Date(initialData.dateFound.seconds * 1000)
             .toISOString()
             .split("T")[0]
@@ -94,6 +95,45 @@ const ItemForm = ({
     setRemovedInitialImagePaths([]);
     setError(""); // Clear any previous errors
   }, [initialData, type, isEditMode]);
+
+  // --- MODIFIED useEffect for cleaning up blob URLs ---
+  useEffect(() => {
+    // Collect all blob URLs from the *current* imagePreviews state
+    const currentBlobUrlsInState = new Set(
+      imagePreviews.filter((url) => url.startsWith("blob:"))
+    );
+
+    // Determine which blob URLs from the *previous* render are no longer in the *current* render
+    const urlsToRevoke = [];
+    previousBlobUrlsRef.current.forEach((prevUrl) => {
+      if (!currentBlobUrlsInState.has(prevUrl)) {
+        urlsToRevoke.push(prevUrl);
+      }
+    });
+
+    // Revoke the URLs that are no longer present in the `imagePreviews` state
+    urlsToRevoke.forEach((url) => {
+      URL.revokeObjectURL(url);
+      // console.log('Revoked old blob URL (no longer in state):', url); // Uncomment for debugging
+    });
+
+    // Update the ref to store the *current* set of blob URLs for the *next* render cycle
+    previousBlobUrlsRef.current = currentBlobUrlsInState;
+
+    // Cleanup function that runs when the component unmounts
+    return () => {
+      // console.log('ItemForm unmounted. Revoking all remaining blob URLs...'); // Uncomment for debugging
+      // Revoke any blob URLs that are still in the ref when the component unmounts
+      previousBlobUrlsRef.current.forEach((url) => {
+        if (url.startsWith("blob:")) {
+          // Ensure it's a blob URL
+          URL.revokeObjectURL(url);
+          // console.log('Revoked on unmount:', url); // Uncomment for debugging
+        }
+      });
+      previousBlobUrlsRef.current = new Set(); // Clear the ref
+    };
+  }, [imagePreviews]); // This effect re-runs whenever the imagePreviews array reference changes
 
   // Determine categories based on form type
   const categories = type === "sell" ? CATEGORIES.SELL : CATEGORIES.LOST_FOUND;
@@ -135,7 +175,7 @@ const ItemForm = ({
         e.target.value = null; // Reset file input
         setIsProcessingImages(false);
         onFormProcessing?.(false);
-        return;
+        return; // This return would prevent further processing but not reset the whole form.
       }
 
       const newlyProcessedFiles = []; // Store successfully processed File objects
@@ -153,7 +193,9 @@ const ItemForm = ({
         try {
           const compressedFile = await compressImage(file); // Compress the image
           newlyProcessedFiles.push(compressedFile);
-          newBlobPreviews.push(URL.createObjectURL(compressedFile)); // Create blob URL for preview
+          const blobUrl = URL.createObjectURL(compressedFile);
+          newBlobPreviews.push(blobUrl); // Create blob URL for preview
+          // console.log('Created blob URL:', blobUrl); // Uncomment for debugging
         } catch (compressionError) {
           console.error(
             "Error compressing image:",
@@ -163,7 +205,9 @@ const ItemForm = ({
           // showMessage?.(`Could not process image ${file.name}. Using original.`, "warning");
           // Fallback to original file if compression fails
           newlyProcessedFiles.push(file);
-          newBlobPreviews.push(URL.createObjectURL(file));
+          const blobUrl = URL.createObjectURL(file); // Even if compression fails, create URL for original
+          newBlobPreviews.push(blobUrl);
+          // console.log('Created fallback blob URL:', blobUrl); // Uncomment for debugging
         }
       }
 
@@ -197,6 +241,7 @@ const ItemForm = ({
       const previewToRemove = imagePreviews[indexToRemove];
       if (previewToRemove.startsWith("blob:")) {
         URL.revokeObjectURL(previewToRemove); // Clean up blob URL to prevent memory leaks
+        // console.log('Revoked manually removed blob URL:', previewToRemove); // Uncomment for debugging
       }
 
       setImagePreviews((prevPreviews) =>
@@ -255,17 +300,6 @@ const ItemForm = ({
     },
     [imagePreviews, initialImages, imageFiles] // Dependencies
   );
-
-  // Effect to clean up blob URLs when component unmounts or previews change
-  useEffect(() => {
-    return () => {
-      imagePreviews.forEach((url) => {
-        if (url && url.startsWith("blob:")) {
-          URL.revokeObjectURL(url);
-        }
-      });
-    };
-  }, [imagePreviews]); // Re-run if imagePreviews array instance changes
 
   /**
    * Validates the form data.
